@@ -19,6 +19,7 @@ class StudyTool(BaseTool):
 
     async def execute(self, params: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         action = params.get("action", "recommend")
+        profile = self.memory.profile.get_profile()
 
         if action == "log_session":
             subject = params.get("subject", "Computer Science")
@@ -43,15 +44,32 @@ class StudyTool(BaseTool):
             }
 
         elif action == "weak_topics":
-            profile = self.memory.profile.get_profile()
             return {
                 "success": True,
                 "action": "weak_topics",
+                "count": len(profile.weak_topics),
                 "weak_topics": profile.weak_topics
             }
 
+        elif action == "plan_revision":
+            return {
+                "success": True,
+                "action": "gate_revision_plan",
+                "target_exam": "GATE Computer Science 2026",
+                "subjects": profile.current_subjects,
+                "priority_topics": profile.weak_topics,
+                "daily_target_hours": profile.target_daily_study_hours,
+                "slot_duration_minutes": profile.preferred_study_slot_mins,
+                "recommendation": (
+                    "Structured GATE CS Revision Plan:\n"
+                    "1. Slot 1 (45 mins): DBMS Transactions & Concurrency Control (Weak Topic Focus)\n"
+                    "2. Slot 2 (45 mins): Dynamic Programming Problem Solving (DSA Mastery)\n"
+                    "3. Slot 3 (45 mins): TCP Congestion Control & Sliding Window (Computer Networks)\n"
+                    "4. Slot 4 (30 mins): Practice Previous Year Questions (PYQs)"
+                )
+            }
+
         # Default: recommend next study action
-        profile = self.memory.profile.get_profile()
         target_topic = profile.weak_topics[0] if profile.weak_topics else "DBMS Transactions"
         return {
             "success": True,

@@ -20,6 +20,32 @@ class Planner:
                 params={"type": "next_best_action"}
             )
 
+        elif intent == "CAREER_GOAL":
+            return TaskPlan(
+                tool_name="profile_tool",
+                action="get_career_goal",
+                params={"action": "get_career_goal"}
+            )
+
+        elif intent == "WEAK_TOPICS":
+            return TaskPlan(
+                tool_name="study_tool",
+                action="weak_topics",
+                params={"action": "weak_topics"}
+            )
+
+        elif intent == "TASK_UPDATE":
+            return TaskPlan(
+                tool_name="task_tool",
+                action="update",
+                params={
+                    "action": "update",
+                    "keyword": entities.get("target"),
+                    "task_id": entities.get("task_id"),
+                    "status": "COMPLETED"
+                }
+            )
+
         elif intent == "TASK_CREATE":
             return TaskPlan(
                 tool_name="task_tool",
@@ -46,10 +72,23 @@ class Planner:
             )
 
         elif intent == "STUDY_PLAN":
+            if entities.get("type") == "gate_revision_plan":
+                return TaskPlan(
+                    tool_name="study_tool",
+                    action="plan_revision",
+                    params={"action": "plan_revision"}
+                )
             return TaskPlan(
                 tool_name="study_tool",
                 action="recommend",
                 params={"action": "recommend", "topic": entities.get("topic")}
+            )
+
+        elif intent == "CODING_HELP":
+            return TaskPlan(
+                tool_name="coding_tool",
+                action="explain",
+                params={"action": "explain", "topic": entities.get("topic", "binary search")}
             )
 
         # General conversation does not require a tool invocation

@@ -9,6 +9,8 @@ from tools.task_tool import TaskTool
 from tools.study_tool import StudyTool
 from tools.schedule_tool import ScheduleTool
 from tools.progress_tool import ProgressTool
+from tools.profile_tool import ProfileTool
+from tools.coding_tool import CodingTool
 
 from core.context_manager import ContextManager
 from core.router import IntentRouter
@@ -44,6 +46,8 @@ class JarvisCore:
             "study_tool": StudyTool(self.memory),
             "schedule_tool": ScheduleTool(self.memory),
             "progress_tool": ProgressTool(self.memory),
+            "profile_tool": ProfileTool(self.memory),
+            "coding_tool": CodingTool(),
         }
 
     async def initialize(self):

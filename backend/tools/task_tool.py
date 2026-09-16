@@ -36,18 +36,38 @@ class TaskTool(BaseTool):
                 "message": f"Task '{title}' created successfully."
             }
 
-        elif action == "update":
+        elif action in ["update", "complete"]:
             task_id = params.get("task_id")
+            keyword = params.get("keyword") or params.get("target")
             status = params.get("status", "COMPLETED")
+
+            if not task_id and keyword:
+                # Search pending tasks for matching keyword (e.g., 'dsa')
+                pending = await self.memory.long_term.list_tasks(status="PENDING")
+                matched = next((t for t in pending if keyword.lower() in t.get("title", "").lower()), None)
+                if matched:
+                    task_id = matched["id"]
+                    task_title = matched["title"]
+                else:
+                    return {
+                        "success": False,
+                        "action": "task_updated",
+                        "message": f"No pending task found matching keyword '{keyword}'."
+                    }
+            else:
+                task_title = f"Task #{task_id}"
+
             if not task_id:
-                return {"success": False, "error": "Task ID is required."}
+                return {"success": False, "error": "Task ID or search keyword is required."}
+
             updated = await self.memory.long_term.update_task_status(int(task_id), status)
             return {
                 "success": updated,
                 "action": "task_updated",
                 "task_id": task_id,
+                "title": task_title,
                 "status": status,
-                "message": f"Task {task_id} updated to {status}." if updated else "Task not found."
+                "message": f"Task '{task_title}' updated to {status}." if updated else "Task not found."
             }
 
         # Default: list tasks
