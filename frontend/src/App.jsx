@@ -46,7 +46,7 @@ export default function App() {
           setAiState('Degraded');
         }
       } catch (err) {
-        setAiState('Backend Connecting');
+        setAiState('Live Web Demo');
       }
     };
     checkHealth();
