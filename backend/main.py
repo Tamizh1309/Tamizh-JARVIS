@@ -6,6 +6,10 @@ from fastapi.responses import JSONResponse
 
 from config.settings import get_settings
 from api.health import router as health_router
+from api.chat import router as chat_router, get_jarvis_core
+from api.study import router as study_router
+from api.tasks import router as tasks_router
+from api.memory import router as memory_router
 
 # Setup structured logging
 logging.basicConfig(
@@ -19,6 +23,9 @@ logger = logging.getLogger("tamizh_jarvis")
 async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("Initializing %s v%s in %s mode...", settings.APP_NAME, settings.APP_VERSION, settings.APP_ENV)
+    core = get_jarvis_core()
+    await core.initialize()
+    logger.info("Tamizh JARVIS Core and Memory subsystems initialized.")
     yield
     logger.info("Shutting down %s...", settings.APP_NAME)
 
@@ -56,6 +63,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Register API Routers
 app.include_router(health_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
+app.include_router(study_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
+app.include_router(memory_router, prefix="/api")
 
 
 @app.get("/")

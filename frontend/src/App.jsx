@@ -12,10 +12,10 @@ import {
   Settings, 
   Send, 
   Mic, 
-  Sparkles,
-  Zap,
-  Clock,
-  ShieldCheck
+  Sparkles, 
+  Zap, 
+  Clock, 
+  ShieldCheck 
 } from 'lucide-react';
 
 export default function App() {
@@ -33,46 +33,104 @@ export default function App() {
   const [inputVal, setInputVal] = useState('');
   const [aiState, setAiState] = useState('Online');
 
-  useEffect(() => {
-    // Poll backend health
-    const checkHealth = async () => {
-      try {
-        const res = await fetch('/api/health');
-        if (res.ok) {
-          const data = await res.json();
-          setHealth(data);
-          setAiState('Online');
-        } else {
-          setAiState('Degraded');
-        }
-      } catch (err) {
-        setAiState('Live Web Demo');
+  // Dynamic Backend Data States
+  const [nextBestAction, setNextBestAction] = useState({
+    title: "Loading recommendation...",
+    reason: "Connecting to JARVIS Decision Engine...",
+    priority: "HIGH",
+    duration_minutes: 45
+  });
+
+  const [dailyBriefing, setDailyBriefing] = useState({
+    pending_tasks_count: 0,
+    target_study_hours: 3.5,
+    today_study_hours: 0,
+    completion_percentage: 0
+  });
+
+  // Fetch telemetry from backend
+  const refreshTelemetry = async () => {
+    try {
+      // 1. Fetch Health
+      const healthRes = await fetch('/api/health');
+      if (healthRes.ok) {
+        const healthData = await healthRes.json();
+        setHealth(healthData);
+        setAiState('Online');
       }
-    };
-    checkHealth();
-    const interval = setInterval(checkHealth, 10000);
+
+      // 2. Fetch Next Best Action from Backend
+      const nbaRes = await fetch('/api/study/next-action');
+      if (nbaRes.ok) {
+        const nbaData = await nbaRes.json();
+        if (nbaData.success) {
+          setNextBestAction({
+            title: nbaData.title || "Revise Core Topic",
+            reason: nbaData.reason || nbaData.description || "Calculated based on study priority.",
+            priority: nbaData.priority || "HIGH",
+            duration_minutes: nbaData.duration_minutes || 45
+          });
+        }
+      }
+
+      // 3. Fetch Daily Briefing from Backend
+      const briefingRes = await fetch('/api/study/briefing');
+      if (briefingRes.ok) {
+        const briefingData = await briefingRes.json();
+        if (briefingData.success) {
+          setDailyBriefing({
+            pending_tasks_count: briefingData.pending_tasks_count || 0,
+            target_study_hours: briefingData.target_study_hours || 3.5,
+            today_study_hours: briefingData.today_study_hours || 0,
+            completion_percentage: briefingData.completion_percentage || 0
+          });
+        }
+      }
+    } catch (err) {
+      setAiState('Live Web Demo');
+    }
+  };
+
+  useEffect(() => {
+    refreshTelemetry();
+    const interval = setInterval(refreshTelemetry, 15000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputVal.trim()) return;
 
+    const userMessageText = inputVal;
     const userMsg = {
       id: Date.now(),
       sender: 'user',
-      text: inputVal,
+      text: userMessageText,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setMessages(prev => [...prev, userMsg]);
-    const currentInput = inputVal;
     setInputVal('');
-
-    // Simulate Agentic Loop Transition
     setAiState('Thinking');
-    setTimeout(() => {
-      setAiState('Planning');
+
+    try {
+      // Call Real Backend POST /api/chat
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessageText,
+          context: {}
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+
+      const result = await response.json();
+      setAiState('Responding');
+
       setTimeout(() => {
         setAiState('Online');
         setMessages(prev => [
@@ -80,13 +138,32 @@ export default function App() {
           {
             id: Date.now() + 1,
             sender: 'jarvis',
-            text: `Received: "${currentInput}". JARVIS Core pipeline is established and preparing next-generation tool integration.`,
+            text: result.response,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            intent: 'GENERAL_CHAT'
+            intent: result.intent,
+            toolUsed: result.toolUsed
           }
         ]);
-      }, 700);
-    }, 500);
+
+        // If action updated tasks or study, refresh sidebar telemetry
+        if (result.memoryUpdated || result.toolUsed !== 'none') {
+          refreshTelemetry();
+        }
+      }, 300);
+
+    } catch (error) {
+      setAiState('Online');
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          sender: 'jarvis',
+          text: `I received your request: "${userMessageText}". Real backend is currently processing or offline: ${error.message}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          intent: 'ERROR'
+        }
+      ]);
+    }
   };
 
   const navItems = [
@@ -148,7 +225,7 @@ export default function App() {
               <span>{aiState}</span>
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              Provider: {health?.ai_provider || 'Initializing'}
+              Provider: {health?.ai_provider || 'Active Engine'}
             </div>
           </div>
         </header>
@@ -175,6 +252,12 @@ export default function App() {
                           <span style={{ color: 'var(--accent-cyan)' }}>{msg.intent}</span>
                         </>
                       )}
+                      {msg.toolUsed && msg.toolUsed !== 'none' && (
+                        <>
+                          <span>•</span>
+                          <span style={{ color: 'var(--accent-purple)' }}>tool: {msg.toolUsed}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -190,7 +273,7 @@ export default function App() {
                 <input
                   type="text"
                   className="chat-input"
-                  placeholder="Message JARVIS... (e.g., 'What is my next best action?')"
+                  placeholder="Message JARVIS... (e.g., 'What should I study now?' or 'create task: Solve 3 LeetCode problems')"
                   value={inputVal}
                   onChange={e => setInputVal(e.target.value)}
                 />
@@ -203,23 +286,27 @@ export default function App() {
 
           {/* Right Telemetry Pane */}
           <aside className="telemetry-pane">
-            {/* Next Best Action Card */}
+            {/* Next Best Action Card (Populated by Backend) */}
             <div className="widget-card">
               <div className="widget-title">
                 <Sparkles size={14} />
                 <span>Next Best Action</span>
               </div>
-              <div className="nba-title">Revise DBMS Transactions</div>
+              <div className="nba-title">{nextBestAction.title}</div>
               <div className="nba-desc">
-                Revision interval is due based on recent quiz scores and your GATE CS 2026 roadmap.
+                {nextBestAction.reason}
               </div>
               <div className="nba-meta">
-                <span className="badge badge-priority-high">HIGH PRIORITY</span>
-                <span className="badge badge-duration">45 MIN</span>
+                <span className={`badge ${nextBestAction.priority === 'HIGH' ? 'badge-priority-high' : 'badge-duration'}`}>
+                  {nextBestAction.priority} PRIORITY
+                </span>
+                <span className="badge badge-duration">
+                  {nextBestAction.duration_minutes} MIN
+                </span>
               </div>
             </div>
 
-            {/* Quick Telemetry */}
+            {/* System Security */}
             <div className="widget-card">
               <div className="widget-title">
                 <ShieldCheck size={14} />
@@ -239,7 +326,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Today's Focus */}
+            {/* Daily Briefing (Populated by Backend) */}
             <div className="widget-card">
               <div className="widget-title">
                 <Clock size={14} />
@@ -247,15 +334,17 @@ export default function App() {
               </div>
               <div className="stat-row">
                 <span className="stat-label">Pending Tasks</span>
-                <span className="stat-val">3 active</span>
+                <span className="stat-val">{dailyBriefing.pending_tasks_count} active</span>
               </div>
               <div className="stat-row">
                 <span className="stat-label">Target Study</span>
-                <span className="stat-val">3.5 hrs</span>
+                <span className="stat-val">{dailyBriefing.target_study_hours} hrs</span>
               </div>
               <div className="stat-row">
                 <span className="stat-label">Completed</span>
-                <span className="stat-val" style={{ color: 'var(--accent-cyan)' }}>1.5 hrs (42%)</span>
+                <span className="stat-val" style={{ color: 'var(--accent-cyan)' }}>
+                  {dailyBriefing.today_study_hours} hrs ({dailyBriefing.completion_percentage}%)
+                </span>
               </div>
             </div>
           </aside>
