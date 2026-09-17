@@ -109,9 +109,9 @@ class IntentRouter:
 
         # 19. CAREER & GOAL
         if any(w in text for w in ["career goal", "my career", "what is my goal", "my goal", "primary goal", "career roadmap", "career plan"]):
-            goal_match = re.search(r"(?:my\s+goal\s+is\s+to\s+(?:become\s+a\s+)?|set\s+my\s+goal\s+to\s+)(.+)", text)
-            if goal_match:
-                entities["goal"] = goal_match.group(1).strip().capitalize()
+            orig_match = re.search(r"(?:my\s+goal\s+is\s+to\s+(?:become\s+a\s+)?|set\s+my\s+goal\s+to\s+)(.+)", message, re.IGNORECASE)
+            if orig_match:
+                entities["goal"] = orig_match.group(1).strip()
                 entities["action"] = "set_goal"
             return "CAREER", 0.95, entities
 

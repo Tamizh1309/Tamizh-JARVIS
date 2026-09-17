@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from typing import Dict, Any, Optional
 
 from ai.provider import AIProvider, get_ai_provider
@@ -47,8 +47,25 @@ class JarvisCore:
             "schedule_tool": ScheduleTool(self.memory),
             "progress_tool": ProgressTool(self.memory),
             "profile_tool": ProfileTool(self.memory),
-            "coding_tool": CodingTool(),
+            "coding_tool": CodingTool(self.ai),
         }
+
+    def get_tool(self, tool_name: str) -> Optional[BaseTool]:
+        """Returns the tool instance if registered in JARVIS."""
+        return self.tools.get(tool_name)
+
+    def has_tool(self, tool_name: str) -> bool:
+        """Checks if a tool is registered in JARVIS."""
+        return tool_name in self.tools
+
+    def validate_tool_registry(self) -> bool:
+        """Validates that all registered tools conform to BaseTool interface."""
+        for name, tool in self.tools.items():
+            if not isinstance(tool, BaseTool):
+                return False
+            if tool.name != name:
+                return False
+        return True
 
     async def initialize(self):
         """Pre-initialize persistent storage and memory."""
@@ -57,7 +74,18 @@ class JarvisCore:
     async def handle(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Main agentic entrypoint handling user message and returning structured response."""
         await self.initialize()
-        user_message = message.strip()
+        user_message = (message or "").strip()
+
+        if not user_message:
+            return {
+                "success": False,
+                "intent": "GENERAL_CHAT",
+                "action": "EMPTY_MESSAGE",
+                "response": "Empty message received. How may I assist your productivity or study today?",
+                "data": {},
+                "toolUsed": "none",
+                "memoryUpdated": False,
+            }
 
         # Stage 1: Thinking (Understand & Context Formulation)
         active_context = await self.context_manager.build_context(user_message, context)
@@ -73,13 +101,42 @@ class JarvisCore:
         action_name = plan.action
         memory_updated = False
 
-        # Stage 3: Executing (Next Best Action or Security-Gated Tool Execution)
+        # Stage 3 & 4: Verifying (Security Authorization) & Executing Tool
         if intent == "NEXT_BEST_ACTION":
+            # Pass through security check
+            authorized, reason, risk_level = self.security.evaluate(
+                tool_name="study_tool",
+                action="recommend",
+                params=plan.params,
+                user_confirmed=True,
+            )
+            if not authorized:
+                return {
+                    "success": False,
+                    "intent": intent,
+                    "action": "PERMISSION_DENIED",
+                    "response": f"Security restriction: {reason}",
+                    "data": {"risk_level": risk_level.value, "reason": reason},
+                    "toolUsed": "decision_engine",
+                    "memoryUpdated": False,
+                }
             tool_result = self.decision_engine.compute_next_best_action(active_context)
             action_name = tool_result.get("action", "NEXT_BEST_ACTION")
             tool_used = "decision_engine"
 
-        elif plan.tool_name and plan.tool_name in self.tools:
+        elif plan.tool_name:
+            if plan.tool_name not in self.tools:
+                logger.error("Architecture error: Planner requested unregistered tool '%s'", plan.tool_name)
+                return {
+                    "success": False,
+                    "intent": intent,
+                    "action": "MISSING_TOOL",
+                    "response": f"Requested tool '{plan.tool_name}' is not registered in JarvisCore.",
+                    "data": {"requested_tool": plan.tool_name},
+                    "toolUsed": plan.tool_name,
+                    "memoryUpdated": False,
+                }
+
             tool = self.tools[plan.tool_name]
 
             # Stage 4: Verifying (Permission Gate & Security Authorization)

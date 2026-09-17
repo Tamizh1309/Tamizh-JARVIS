@@ -1,4 +1,4 @@
-﻿from typing import Dict, Any
+from typing import Dict, Any
 
 
 class ResponseManager:
@@ -14,10 +14,19 @@ class ResponseManager:
         if tool_result:
             action = tool_result.get("action")
 
-            if action == "REVISION_SESSION":
-                topic = tool_result.get("topic", "Computer Science Core")
+            # Next Best Action & Decision Engine Actions
+            if intent == "NEXT_BEST_ACTION" or action in [
+                "REVISION_SESSION",
+                "EXECUTE_HIGH_PRIORITY_TASK",
+                "FOCUS_STUDY",
+                "DAILY_REVIEW",
+                "DSA_PRACTICE",
+                "EXECUTE_TASK",
+            ]:
+                title = tool_result.get("title") or tool_result.get("topic") or "Core Study Session"
                 duration = tool_result.get("duration_minutes", 45)
-                return f"Next Best Action: Revise {topic} for {duration} minutes. {tool_result.get('reason', '')}"
+                reason = tool_result.get("reason", "")
+                return f"Next Best Action: {title} ({duration} mins). {reason}".strip()
 
             if action == "career_goal":
                 return (
@@ -35,7 +44,7 @@ class ResponseManager:
                 topics = tool_result.get("weak_topics", [])
                 if not topics:
                     return "You currently have no recorded weak topics. Excellent work!"
-                return "Your current weak topics requiring priority revision are:\n" + "\n".join([f"• {t}" for t in topics])
+                return "Your current weak topics requiring priority revision are:\n" + "\n".join([f"  {t}" for t in topics])
 
             if action == "gate_revision_plan":
                 return tool_result.get("recommendation", "GATE revision plan prepared.")
@@ -45,8 +54,8 @@ class ResponseManager:
 
             if action == "dsa_practice":
                 probs = tool_result.get("recommended_problems", [])
-                lines = [f"• {p['title']} [{p['difficulty']}] - Pattern: {p['pattern']}" for p in probs]
-                return f"DSA Practice Plan:\n" + "\n".join(lines)
+                lines = [f"  {p['title']} [{p['difficulty']}] - Pattern: {p['pattern']}" for p in probs]
+                return "DSA Practice Plan:\n" + "\n".join(lines)
 
             if action == "debug_code":
                 return tool_result.get("message", "Debugging guidance ready.")
@@ -82,7 +91,7 @@ class ResponseManager:
                 tasks = tool_result.get("tasks", [])
                 if not tasks:
                     return "You have no active tasks currently in your backlog."
-                titles = [f"• [{t.get('priority', 'MED')}] {t.get('title')} ({t.get('status')})" for t in tasks]
+                titles = [f"  [{t.get('priority', 'MED')}] {t.get('title')} ({t.get('status')})" for t in tasks]
                 return "Your Pending Tasks:\n" + "\n".join(titles)
 
             if action == "daily_briefing":

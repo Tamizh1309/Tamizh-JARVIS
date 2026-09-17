@@ -23,11 +23,15 @@ class ScheduleTool(BaseTool):
         current_time_str = now.strftime("%I:%M %p")
         profile = self.memory.profile.get_profile()
 
-        return {
-            "success": True,
-            "action": "schedule_status",
+        msg = f"Current time is {current_time_str}. You have an open focus slot ready for study."
+        data = {
             "current_time": current_time_str,
             "target_study_hours": profile.target_daily_study_hours,
             "next_available_slot": "Now (Focus Block)",
-            "message": f"Current time is {current_time_str}. You have an open focus slot ready for study."
         }
+        return self.format_output(
+            success=True,
+            action="schedule_status",
+            data=data,
+            message=msg
+        )

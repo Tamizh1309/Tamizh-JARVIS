@@ -26,12 +26,16 @@ class ProgressTool(BaseTool):
 
         pending_tasks = await self.memory.long_term.list_tasks(status="PENDING")
 
-        return {
-            "success": True,
-            "action": "daily_briefing",
+        msg = f"Daily Briefing: {len(pending_tasks)} pending tasks, {today_hours}h / {target_hours}h studied ({percentage}% complete)."
+        data = {
             "pending_tasks_count": len(pending_tasks),
             "today_study_hours": today_hours,
             "target_study_hours": target_hours,
             "completion_percentage": percentage,
-            "message": f"Daily Briefing: {len(pending_tasks)} pending tasks, {today_hours}h / {target_hours}h studied ({percentage}% complete)."
         }
+        return self.format_output(
+            success=True,
+            action="daily_briefing",
+            data=data,
+            message=msg
+        )
