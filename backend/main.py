@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing %s v%s in %s mode...", settings.APP_NAME, settings.APP_VERSION, settings.APP_ENV)
     core = get_jarvis_core()
     await core.initialize()
-    logger.info("Tamizh JARVIS Core and Memory subsystems initialized.")
+    logger.info("Tamizh JARVIS Core, Storage, and Memory subsystems fully initialized.")
     yield
     logger.info("Shutting down %s...", settings.APP_NAME)
 
@@ -38,12 +38,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS Middleware to allow React Frontend communication
+# Parse allowed CORS origins safely without wildcards for credentials
+raw_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+if not raw_origins:
+    raw_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "https://tamizh1309.github.io"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
+    allow_origins=raw_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -51,12 +55,13 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error("Unhandled error processing %s: %s", request.url.path, str(exc), exc_info=True)
+    # Never expose raw stack traces in production (Section 18)
     return JSONResponse(
         status_code=500,
         content={
             "success": False,
             "error": "Internal server error occurred.",
-            "detail": str(exc) if settings.APP_ENV == "development" else "Contact administrator",
+            "detail": str(exc) if settings.APP_ENV == "development" else "An unexpected error occurred. Please try again.",
         },
     )
 

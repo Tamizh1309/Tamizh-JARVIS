@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Bot, 
   Terminal, 
@@ -17,8 +17,12 @@ import {
   Clock, 
   ShieldCheck,
   Plus,
-  CheckCircle2
+  CheckCircle2,
+  Trash2,
+  Play
 } from 'lucide-react';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('chat');
@@ -40,7 +44,8 @@ export default function App() {
     title: "Loading recommendation...",
     reason: "Connecting to JARVIS Decision Engine...",
     priority: "HIGH",
-    duration_minutes: 45
+    duration_minutes: 45,
+    action: "FOCUS_STUDY"
   });
 
   const [dailyBriefing, setDailyBriefing] = useState({
@@ -57,7 +62,7 @@ export default function App() {
   const refreshTelemetry = async () => {
     try {
       // 1. Fetch Health
-      const healthRes = await fetch('/api/health');
+      const healthRes = await fetch(`${API_BASE_URL}/api/health`);
       if (healthRes.ok) {
         const healthData = await healthRes.json();
         setHealth(healthData);
@@ -65,7 +70,7 @@ export default function App() {
       }
 
       // 2. Fetch Next Best Action from Backend
-      const nbaRes = await fetch('/api/study/next-action');
+      const nbaRes = await fetch(`${API_BASE_URL}/api/study/next-action`);
       if (nbaRes.ok) {
         const nbaData = await nbaRes.json();
         if (nbaData.success) {
@@ -73,13 +78,14 @@ export default function App() {
             title: nbaData.title || "Revise Core Topic",
             reason: nbaData.reason || nbaData.description || "Calculated based on study priority.",
             priority: nbaData.priority || "HIGH",
-            duration_minutes: nbaData.duration_minutes || 45
+            duration_minutes: nbaData.duration_minutes || 45,
+            action: nbaData.action || "FOCUS_STUDY"
           });
         }
       }
 
       // 3. Fetch Daily Briefing from Backend
-      const briefingRes = await fetch('/api/study/briefing');
+      const briefingRes = await fetch(`${API_BASE_URL}/api/study/briefing`);
       if (briefingRes.ok) {
         const briefingData = await briefingRes.json();
         if (briefingData.success) {
@@ -93,7 +99,7 @@ export default function App() {
       }
 
       // 4. Fetch Tasks List
-      const tasksRes = await fetch('/api/tasks');
+      const tasksRes = await fetch(`${API_BASE_URL}/api/tasks`);
       if (tasksRes.ok) {
         const tasksData = await tasksRes.json();
         if (tasksData.success) {
@@ -101,7 +107,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      setAiState('Live Web Demo');
+      setAiState('Offline Mode');
     }
   };
 
@@ -112,7 +118,7 @@ export default function App() {
   }, []);
 
   const handleSendMessage = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!inputVal.trim()) return;
 
     const userMessageText = inputVal;
@@ -128,8 +134,10 @@ export default function App() {
     setAiState('Thinking');
 
     try {
-      // Call Real Backend POST /api/chat
-      const response = await fetch('/api/chat', {
+      // Step-by-step safe status indicator progression
+      setTimeout(() => setAiState('Planning'), 200);
+
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -142,9 +150,10 @@ export default function App() {
         throw new Error(`Server returned ${response.status}`);
       }
 
+      setAiState('Executing');
       const result = await response.json();
-      setAiState('Responding');
 
+      setAiState('Responding');
       setTimeout(() => {
         setAiState('Online');
         setMessages(prev => [
@@ -159,7 +168,6 @@ export default function App() {
           }
         ]);
 
-        // If action updated tasks or study, refresh telemetry
         if (result.memoryUpdated || result.toolUsed !== 'none') {
           refreshTelemetry();
         }
@@ -172,7 +180,7 @@ export default function App() {
         {
           id: Date.now() + 1,
           sender: 'jarvis',
-          text: `I received your request: "${userMessageText}". Real backend connection: ${error.message}`,
+          text: `Error connecting to JARVIS backend: ${error.message}. Please verify the server is running.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           intent: 'ERROR'
         }
@@ -184,7 +192,7 @@ export default function App() {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
     try {
-      const res = await fetch('/api/tasks', {
+      const res = await fetch(`${API_BASE_URL}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTaskTitle, priority: 'MEDIUM' })
@@ -196,6 +204,37 @@ export default function App() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleCompleteTask = async (taskId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/complete`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        refreshTelemetry();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        refreshTelemetry();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleExecuteNBA = () => {
+    setActiveTab('chat');
+    setInputVal(`Execute Next Best Action: ${nextBestAction.title}`);
   };
 
   const navItems = [
@@ -287,15 +326,34 @@ export default function App() {
               {tasksList.map(task => (
                 <div key={task.id} className="item-card">
                   <div className="item-card-title">
-                    <span>{task.title}</span>
+                    <span style={{ textDecoration: task.status === 'COMPLETED' ? 'line-through' : 'none' }}>
+                      {task.title}
+                    </span>
                     <span className={`badge ${task.priority === 'HIGH' ? 'badge-priority-high' : 'badge-duration'}`}>
                       {task.priority}
                     </span>
                   </div>
                   <div className="item-card-desc">{task.description || "Milestone task in backlog."}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                    <span>Status: {task.status}</span>
-                    <span>ID #{task.id}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    <span>Status: <strong style={{ color: task.status === 'COMPLETED' ? 'var(--accent-emerald)' : 'inherit' }}>{task.status}</strong></span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {task.status !== 'COMPLETED' && (
+                        <button 
+                          onClick={() => handleCompleteTask(task.id)}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--accent-emerald)', cursor: 'pointer' }}
+                          title="Complete Task"
+                        >
+                          <CheckCircle2 size={16} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDeleteTask(task.id)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: 'pointer' }}
+                        title="Delete Task"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -307,7 +365,7 @@ export default function App() {
           <div className="tab-view-container">
             <div>
               <h2 className="tab-header-title"><BookOpen size={22} color="var(--accent-cyan)" /> Study & GATE Preparation</h2>
-              <p className="tab-header-desc">Target: GATE Computer Science 2026. Daily target: 3.5 study hours.</p>
+              <p className="tab-header-desc">Target: GATE Computer Science 2026. Daily target: {dailyBriefing.target_study_hours} study hours.</p>
             </div>
             <div className="card-grid">
               <div className="item-card">
@@ -492,13 +550,33 @@ export default function App() {
                 <div className="nba-desc">
                   {nextBestAction.reason}
                 </div>
-                <div className="nba-meta">
-                  <span className={`badge ${nextBestAction.priority === 'HIGH' ? 'badge-priority-high' : 'badge-duration'}`}>
-                    {nextBestAction.priority} PRIORITY
-                  </span>
-                  <span className="badge badge-duration">
-                    {nextBestAction.duration_minutes} MIN
-                  </span>
+                <div className="nba-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <span className={`badge ${nextBestAction.priority === 'HIGH' ? 'badge-priority-high' : 'badge-duration'}`}>
+                      {nextBestAction.priority} PRIORITY
+                    </span>
+                    <span className="badge badge-duration">
+                      {nextBestAction.duration_minutes} MIN
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleExecuteNBA}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: 'var(--accent-cyan)',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      fontSize: '0.75rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Play size={12} fill="#000" /> Start
+                  </button>
                 </div>
               </div>
 

@@ -1,5 +1,5 @@
-from functools import lru_cache
-from typing import Optional
+﻿from functools import lru_cache
+from typing import Optional, List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,13 +23,16 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.5-flash"
     LOCAL_LLM_BASE_URL: str = "http://localhost:11434"
     LOCAL_LLM_MODEL: str = "llama3"
-    DEFAULT_AI_PROVIDER: str = "auto"  # "gemini", "local", or "auto"
+    DEFAULT_AI_PROVIDER: str = "auto"  # "gemini", "local", "fallback", or "auto"
 
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./jarvis.db"
 
     # Security
     SECURITY_REQUIRE_APPROVAL_FOR_HIGH_RISK: bool = True
+
+    # CORS Allowed Origins (comma-separated string or list)
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,https://tamizh1309.github.io"
 
 
 @lru_cache()
