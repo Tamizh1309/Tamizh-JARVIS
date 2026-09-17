@@ -4,7 +4,7 @@ from memory.memory_manager import MemoryManager
 
 
 class StudyTool(BaseTool):
-    """Tool for GATE preparation, dynamic revision planning, and study session logging."""
+    """Tool for dynamic GATE preparation, spaced repetition revision planning, and study session logging."""
 
     def __init__(self, memory_manager: MemoryManager):
         self.memory = memory_manager
@@ -18,6 +18,7 @@ class StudyTool(BaseTool):
         return "Provides subject revision recommendations, tracks weak topics, and logs study sessions."
 
     async def execute(self, params: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
+        context = context or {}
         action_raw = params.get("action", "recommend")
         action = action_raw.lower().strip() if isinstance(action_raw, str) else "recommend"
         profile = self.memory.profile.get_profile()
@@ -28,21 +29,34 @@ class StudyTool(BaseTool):
             topic = params.get("topic", "General Revision")
             duration = int(params.get("duration", 45))
             notes = params.get("notes", "")
-            session_id = await self.memory.long_term.log_study_session(subject, topic, duration, notes=notes)
+            session_type = params.get("session_type", "STUDY")
+            score = float(params.get("score", 0.0))
+            timestamp = params.get("timestamp")
+
+            session_id = await self.memory.long_term.log_study_session(
+                subject, topic, duration, notes=notes, session_type=session_type, score=score, timestamp=timestamp
+            )
+            await self.memory.create("STUDY", f"session_{session_id}", {
+                "subject": subject,
+                "topic": topic,
+                "duration": duration,
+                "notes": notes,
+                "session_type": session_type,
+                "score": score,
+                "timestamp": timestamp,
+            })
             data = {
                 "session_id": session_id,
                 "subject": subject,
                 "topic": topic,
                 "duration": duration,
-                "notes": notes
+                "notes": notes,
+                "session_type": session_type,
+                "score": score,
+                "timestamp": timestamp,
             }
             msg = f"Logged {duration} minutes for topic '{topic}' in {subject}."
-            return self.format_output(
-                success=True,
-                action="session_logged",
-                data=data,
-                message=msg
-            )
+            return self.format_output(success=True, action="session_logged", data=data, message=msg)
 
         # 2. STUDY HISTORY
         elif action in ["history", "study_history"]:
@@ -53,111 +67,82 @@ class StudyTool(BaseTool):
                 "sessions": history
             }
             msg = f"Retrieved {len(history)} recent study sessions."
-            return self.format_output(
-                success=True,
-                action="study_history",
-                data=data,
-                message=msg
-            )
+            return self.format_output(success=True, action="study_history", data=data, message=msg)
 
         # 3. WEAK TOPICS & MISTAKE ANALYSIS
         elif action in ["weak_topics", "mistake_analysis"]:
-            weak_records = await self.memory.long_term.list_memory_by_category("MISTAKES")
-            recorded_mistakes = [r.get("value") for r in weak_records]
             data = {
-                "count": len(profile.weak_topics),
                 "weak_topics": profile.weak_topics,
-                "recorded_mistakes": recorded_mistakes
+                "count": len(profile.weak_topics),
+                "high_priority": profile.weak_topics[0] if profile.weak_topics else None,
+                "reinforcement_strategy": "Spaced repetition with active recall (30m problem solving + 15m formula derivation)."
             }
-            msg = f"Identified {len(profile.weak_topics)} weak topics requiring priority reinforcement."
-            return self.format_output(
-                success=True,
-                action="weak_topics",
-                data=data,
-                message=msg
-            )
+            msg = f"Tracked {len(profile.weak_topics)} weak topics requiring reinforcement: {', '.join(profile.weak_topics)}."
+            return self.format_output(success=True, action="weak_topics", data=data, message=msg)
 
-        # 4. PLAN REVISION
-        elif action in ["plan_revision", "revision_plan"]:
-            target_topic = profile.weak_topics[0] if profile.weak_topics else "DBMS Transactions"
-            rec_lines = [
-                "Structured GATE CS Revision Plan:",
-                f"1. Slot 1 ({profile.preferred_study_slot_mins} mins): {target_topic} (Weak Topic Reinforcement)",
-                "2. Slot 2 (45 mins): Dynamic Programming Problem Solving (DSA Mastery)",
-                "3. Slot 3 (45 mins): TCP Congestion Control & Sliding Window (Computer Networks)",
-                "4. Slot 4 (30 mins): Practice Previous Year Questions (PYQs)"
+        # 4. GATE REVISION PLAN
+        elif action in ["gate_revision_plan", "revision", "plan_revision"]:
+            recent_sessions = await self.memory.long_term.get_study_history(limit=5)
+            studied_topics = [s.get("topic") for s in recent_sessions]
+
+            # Spaced repetition: select weak topic not recently studied
+            selected_topic = profile.weak_topics[0] if profile.weak_topics else "Database Management Systems"
+            for wt in profile.weak_topics:
+                if wt not in studied_topics:
+                    selected_topic = wt
+                    break
+
+            modules = [
+                f"Block 1 (45m): {selected_topic} Core Principles & Formula Derivation",
+                "Block 2 (30m): Solve 10 Previous Year Questions (PYQs) under timed constraints",
+                "Block 3 (15m): Mistake consolidation and formula notebook update"
             ]
-            recommendation = "\n".join(rec_lines)
-            data = {
-                "target_exam": "GATE Computer Science 2026",
-                "subjects": profile.current_subjects,
-                "priority_topics": profile.weak_topics,
-                "daily_target_hours": profile.target_daily_study_hours,
-                "slot_duration_minutes": profile.preferred_study_slot_mins,
-                "recommendation": recommendation
+            plan = {
+                "target_exam": "GATE CS 2026",
+                "target_goal": profile.primary_goal,
+                "focus_topic": selected_topic,
+                "estimated_duration_minutes": 90,
+                "modules": modules,
+                "reason": f"Prioritized '{selected_topic}' because it is in your active weak topics list and revision is due."
             }
-            return self.format_output(
-                success=True,
-                action="gate_revision_plan",
-                data=data,
-                message=recommendation
+            msg = (
+                f"Personalized GATE Revision Plan for {profile.primary_goal}:\n"
+                f"Focus Topic: {selected_topic} (Spaced repetition interval due)\n"
+                f"Schedule: 90 Minutes across 3 targeted blocks."
             )
+            return self.format_output(success=True, action="gate_revision_plan", data=plan, message=msg)
 
-        # 5. GATE PREPARATION STRATEGY
-        elif action in ["gate_prep", "gate_preparation"]:
-            high_weightage = [
-                "Data Structures & Algorithms (15-18 marks)",
-                "Operating Systems (8-10 marks)",
-                "Database Management Systems (7-9 marks)",
-                "Computer Networks (7-9 marks)",
-                "Theory of Computation & Compiler Design (12-14 marks)"
-            ]
-            focus = profile.weak_topics[0] if profile.weak_topics else "Data Structures & Algorithms"
-            msg = f"GATE CS Roadmap active. Prioritize high-weightage subjects and daily PYQ practice. Recommended focus: {focus}."
-            data = {
-                "target_exam": "GATE Computer Science 2026",
-                "high_weightage_subjects": high_weightage,
-                "recommended_focus": focus
+        # 5. GATE PREPARATION ROADMAP
+        elif action in ["gate_preparation", "roadmap"]:
+            roadmap = {
+                "exam": "GATE CS 2026",
+                "user_name": profile.name,
+                "primary_goal": profile.primary_goal,
+                "target_daily_hours": profile.target_daily_study_hours,
+                "core_subjects": profile.current_subjects,
+                "phase": "Core Subject Mastery & PYQ Solving",
             }
-            return self.format_output(
-                success=True,
-                action="gate_preparation",
-                data=data,
-                message=msg
-            )
+            msg = f"GATE CS Preparation Roadmap loaded for {profile.name}. Target daily commitment: {profile.target_daily_study_hours} hours."
+            return self.format_output(success=True, action="gate_preparation", data=roadmap, message=msg)
 
-        # 6. NEXT BEST ACTION / DYNAMIC RECOMMENDATION
-        history = await self.memory.long_term.get_study_history(limit=5)
-        recent_topics = [s.get("topic", "").lower() for s in history]
+        # 6. DYNAMIC RECOMMENDATION
+        else:
+            recent_sessions = await self.memory.long_term.get_study_history(limit=5)
+            studied_topics = [s.get("topic") for s in recent_sessions]
 
-        candidate_topic = "DBMS Transactions & Concurrency Control"
-        candidate_subject = "Database Management Systems"
+            # Pick from weak topics or subjects
+            candidate = None
+            for wt in profile.weak_topics:
+                if wt not in studied_topics:
+                    candidate = wt
+                    break
+            if not candidate:
+                candidate = profile.current_subjects[0] if profile.current_subjects else "Database Management Systems"
 
-        for wt in profile.weak_topics:
-            if not any(wt.lower() in rt for rt in recent_topics):
-                candidate_topic = wt
-                if "dp" in wt.lower() or "dynamic programming" in wt.lower():
-                    candidate_subject = "Data Structures & Algorithms"
-                elif "tcp" in wt.lower() or "network" in wt.lower():
-                    candidate_subject = "Computer Networks"
-                elif "os" in wt.lower() or "deadlock" in wt.lower():
-                    candidate_subject = "Operating Systems"
-                else:
-                    candidate_subject = "Database Management Systems"
-                break
-
-        msg = f"Next Best Action: Revise {candidate_topic} in {candidate_subject} for {profile.preferred_study_slot_mins} minutes."
-        data = {
-            "subject": candidate_subject,
-            "topic": candidate_topic,
-            "duration_minutes": profile.preferred_study_slot_mins,
-            "priority": "HIGH",
-            "reason": "Revision interval is due based on recent performance and current weak topics.",
-            "recommendation": f"Revise {candidate_topic} for {profile.preferred_study_slot_mins} minutes."
-        }
-        return self.format_output(
-            success=True,
-            action="REVISION_SESSION",
-            data=data,
-            message=msg
-        )
+            data = {
+                "topic": candidate,
+                "recommended_minutes": profile.preferred_study_slot_mins,
+                "reason": f"Spaced repetition due for '{candidate}' based on recent session history."
+            }
+            msg = f"Recommended Study Session: Focus on '{candidate}' for {profile.preferred_study_slot_mins} minutes."
+            return self.format_output(success=True, action="study_recommendation", data=data, message=msg)

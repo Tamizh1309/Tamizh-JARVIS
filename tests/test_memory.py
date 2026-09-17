@@ -103,3 +103,45 @@ async def test_memory_tasks_crud_full_schema(tmp_path):
     assert t_del is None
 
     await mem.long_term.close()
+
+
+@pytest.mark.asyncio
+async def test_memory_domain_classification(tmp_path):
+    db_file = str(tmp_path / "test_domains.db")
+    mem = MemoryManager(db_path=db_file)
+    await mem.initialize()
+
+    # Test distinct memory domain classifications
+    domains = ["USER_PROFILE", "GOAL", "PREFERENCE", "TASK", "STUDY", "ACHIEVEMENT", "MISTAKE", "REVISION"]
+    for d in domains:
+        k = f"key_{d.lower()}"
+        v = f"val_{d.lower()}"
+        ok = await mem.create(d, k, v)
+        assert ok is True
+        item = await mem.read(d, k)
+        assert item is not None
+        assert item["value"] == v
+
+    await mem.long_term.close()
+
+
+@pytest.mark.asyncio
+async def test_conversational_chat_not_persisted_as_permanent_facts(tmp_path):
+    db_file = str(tmp_path / "test_chat_isolation.db")
+    mem = MemoryManager(db_path=db_file)
+    await mem.initialize()
+
+    # Record general chat interaction
+    mem.record_interaction("user", "How is the weather today?", "GENERAL_CHAT")
+    mem.record_interaction("jarvis", "I am here to assist your productivity and study!", "GENERAL_CHAT")
+
+    # Check conversation context (short-term window)
+    ctx = mem.get_conversation_context(count=5)
+    assert len(ctx) == 2
+    assert ctx[0]["text"] == "How is the weather today?"
+
+    # Crucial assertion: long_term SQLite memory_records must NOT have this chat as a fact!
+    facts = await mem.long_term.get_facts()
+    assert not any("weather" in str(f.get("value", "")).lower() for f in facts)
+
+    await mem.long_term.close()

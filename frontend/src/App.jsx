@@ -105,7 +105,8 @@ export default function App() {
             reason: nbaData.reason || nbaData.description || "Calculated based on study priority.",
             priority: nbaData.priority || "HIGH",
             duration_minutes: nbaData.duration_minutes || 45,
-            action: nbaData.action || "FOCUS_STUDY"
+            action: nbaData.action || "FOCUS_STUDY",
+            score_breakdown: nbaData.score_breakdown || {}
           });
         }
       }
@@ -206,7 +207,8 @@ export default function App() {
     }
 
     try {
-      setTimeout(() => setAiState('Planning'), 200);
+      setTimeout(() => setAiState('Planning'), 150);
+      setTimeout(() => setAiState('Verifying'), 300);
 
       const response = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
@@ -235,7 +237,8 @@ export default function App() {
             text: result.response,
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             intent: result.intent,
-            toolUsed: result.toolUsed
+            toolUsed: result.toolUsed,
+            data: result.data
           }
         ]);
 
@@ -245,7 +248,7 @@ export default function App() {
       }, 300);
 
     } catch (error) {
-      setAiState('Offline Mode');
+      setAiState('Error');
       setMessages(prev => [
         ...prev,
         {
@@ -624,6 +627,17 @@ export default function App() {
                       <div className="message-body" style={{ whiteSpace: 'pre-wrap' }}>
                         {msg.text}
                       </div>
+                      {msg.data && msg.data.fixed_code && (
+                        <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(0, 242, 254, 0.05)', borderRadius: '4px', border: '1px solid rgba(0, 242, 254, 0.2)' }}>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>Proposed Fix:</div>
+                          <pre style={{ margin: '4px 0 0 0', fontSize: '0.75rem', overflowX: 'auto', fontFamily: 'var(--font-mono)' }}>{msg.data.fixed_code}</pre>
+                        </div>
+                      )}
+                      {msg.data && msg.data.ats_score && (
+                        <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'rgba(52, 211, 153, 0.05)', borderRadius: '4px', border: '1px solid rgba(52, 211, 153, 0.2)', fontSize: '0.78rem' }}>
+                          <span style={{ color: 'var(--accent-emerald)', fontWeight: 'bold' }}>ATS Match Score: {msg.data.ats_score}/100</span>
+                        </div>
+                      )}
                       <div className="message-meta">
                         <span>{msg.time}</span>
                         {msg.intent && (
@@ -676,6 +690,15 @@ export default function App() {
                 <div className="nba-desc">
                   {nextBestAction.reason}
                 </div>
+                {nextBestAction.score_breakdown && Object.keys(nextBestAction.score_breakdown).length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '6px 0' }}>
+                    {Object.entries(nextBestAction.score_breakdown).map(([factor, score]) => (
+                      <span key={factor} style={{ fontSize: '0.65rem', padding: '2px 5px', borderRadius: '3px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)' }}>
+                        {factor}: {(score * 100).toFixed(0)}%
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="nba-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <span className={`badge ${nextBestAction.priority === 'HIGH' ? 'badge-priority-high' : 'badge-duration'}`}>

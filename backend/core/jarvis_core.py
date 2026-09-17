@@ -1,6 +1,5 @@
 import logging
 from typing import Dict, Any, Optional
-
 from ai.provider import AIProvider, get_ai_provider
 from memory.memory_manager import MemoryManager
 from security.permission_manager import PermissionManager
@@ -46,7 +45,7 @@ class JarvisCore:
             "study_tool": StudyTool(self.memory),
             "schedule_tool": ScheduleTool(self.memory),
             "progress_tool": ProgressTool(self.memory),
-            "profile_tool": ProfileTool(self.memory),
+            "profile_tool": ProfileTool(self.memory, self.ai),
             "coding_tool": CodingTool(self.ai),
         }
 
@@ -73,7 +72,6 @@ class JarvisCore:
 
     async def handle(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Main agentic entrypoint handling user message and returning structured response."""
-        await self.initialize()
         user_message = (message or "").strip()
 
         if not user_message:
@@ -87,131 +85,155 @@ class JarvisCore:
                 "memoryUpdated": False,
             }
 
-        # Stage 1: Thinking (Understand & Context Formulation)
-        active_context = await self.context_manager.build_context(user_message, context)
+        intent = "GENERAL_CHAT"
+        tool_used = "none"
+        action_name = "general_chat"
 
-        # Stage 2: Planning (Intent Routing & Action Formulation)
-        intent, confidence, entities = await self.router.route(user_message, active_context)
-        logger.info("Routed intent: %s (confidence: %.2f)", intent, confidence)
+        try:
+            await self.initialize()
 
-        plan = self.planner.create_plan(intent, entities, active_context)
+            # Stage 1: Thinking (Understand & Context Formulation)
+            active_context = await self.context_manager.build_context(user_message, context)
 
-        tool_result = None
-        tool_used = plan.tool_name
-        action_name = plan.action
-        memory_updated = False
+            # Stage 2: Planning (Intent Routing & Action Formulation)
+            intent, confidence, entities = await self.router.route(user_message, active_context)
+            logger.info("Routed intent: %s (confidence: %.2f)", intent, confidence)
 
-        # Stage 3 & 4: Verifying (Security Authorization) & Executing Tool
-        if intent == "NEXT_BEST_ACTION":
-            # Pass through security check
-            authorized, reason, risk_level = self.security.evaluate(
-                tool_name="study_tool",
-                action="recommend",
-                params=plan.params,
-                user_confirmed=True,
+            plan = self.planner.create_plan(intent, entities, active_context)
+
+            tool_result = None
+            tool_used = plan.tool_name
+            action_name = plan.action
+            memory_updated = False
+
+            # Stage 3 & 4: Verifying (Security Authorization) & Executing Tool
+            if intent == "NEXT_BEST_ACTION":
+                authorized, reason, risk_level = self.security.evaluate(
+                    tool_name="study_tool",
+                    action="recommend",
+                    params=plan.params,
+                    user_confirmed=True,
+                )
+                if not authorized:
+                    return {
+                        "success": False,
+                        "intent": intent,
+                        "action": "PERMISSION_DENIED",
+                        "response": f"Security restriction: {reason}",
+                        "data": {"risk_level": risk_level.value, "reason": reason},
+                        "toolUsed": "decision_engine",
+                        "memoryUpdated": False,
+                    }
+                tool_result = self.decision_engine.compute_next_best_action(active_context)
+                action_name = tool_result.get("action", "NEXT_BEST_ACTION")
+                tool_used = "decision_engine"
+
+            elif plan.tool_name:
+                if plan.tool_name not in self.tools:
+                    logger.error("Architecture error: Planner requested unregistered tool '%s'", plan.tool_name)
+                    return {
+                        "success": False,
+                        "intent": intent,
+                        "action": "MISSING_TOOL",
+                        "response": f"Requested tool '{plan.tool_name}' is not registered in JarvisCore.",
+                        "data": {"requested_tool": plan.tool_name},
+                        "toolUsed": plan.tool_name,
+                        "memoryUpdated": False,
+                    }
+
+                tool = self.tools[plan.tool_name]
+
+                # Stage 4: Verifying (Permission Gate & Security Authorization)
+                is_confirmed = bool(context.get("confirmed", False)) if context else False
+                authorized, reason, risk_level = self.security.evaluate(
+                    tool_name=plan.tool_name,
+                    action=plan.action,
+                    params=plan.params,
+                    user_confirmed=is_confirmed,
+                )
+
+                if not authorized:
+                    return {
+                        "success": False,
+                        "intent": intent,
+                        "action": "PERMISSION_DENIED",
+                        "response": f"Security restriction: {reason}",
+                        "data": {"risk_level": risk_level.value, "reason": reason},
+                        "toolUsed": tool_used,
+                        "memoryUpdated": False,
+                    }
+
+                # Safe Execution
+                try:
+                    tool_result = await tool.execute(plan.params, active_context)
+                    action_name = tool_result.get("action", plan.action)
+                except Exception as e:
+                    logger.error("Tool execution failed: %s", str(e), exc_info=True)
+                    return {
+                        "success": False,
+                        "intent": intent,
+                        "action": "TOOL_ERROR",
+                        "response": f"Tool execution encountered an error: {str(e)}",
+                        "data": {"error": str(e)},
+                        "toolUsed": tool_used,
+                        "memoryUpdated": False,
+                    }
+
+            # Stage 5: Responding (Language Generation & Synthesis)
+            raw_ai_text = None
+            if not tool_result:
+                system_prompt = (
+                    "You are Tamizh JARVIS, a personal agentic AI assistant. "
+                    "Tagline: Think. Plan. Execute. Learn. "
+                    "Be concise, clear, helpful, and proactive."
+                )
+                try:
+                    raw_ai_text = await self.ai.generate(prompt=user_message, system_prompt=system_prompt)
+                except Exception as ai_err:
+                    logger.warning("AI generation fallback: %s", str(ai_err))
+                    raw_ai_text = "I received your request. How may I assist your tasks or study?"
+
+            response_text = self.response_manager.format_response(
+                intent=intent,
+                tool_result=tool_result,
+                raw_ai_text=raw_ai_text,
+                context=active_context,
             )
-            if not authorized:
-                return {
-                    "success": False,
-                    "intent": intent,
-                    "action": "PERMISSION_DENIED",
-                    "response": f"Security restriction: {reason}",
-                    "data": {"risk_level": risk_level.value, "reason": reason},
-                    "toolUsed": "decision_engine",
-                    "memoryUpdated": False,
-                }
-            tool_result = self.decision_engine.compute_next_best_action(active_context)
-            action_name = tool_result.get("action", "NEXT_BEST_ACTION")
-            tool_used = "decision_engine"
 
-        elif plan.tool_name:
-            if plan.tool_name not in self.tools:
-                logger.error("Architecture error: Planner requested unregistered tool '%s'", plan.tool_name)
-                return {
-                    "success": False,
-                    "intent": intent,
-                    "action": "MISSING_TOOL",
-                    "response": f"Requested tool '{plan.tool_name}' is not registered in JarvisCore.",
-                    "data": {"requested_tool": plan.tool_name},
-                    "toolUsed": plan.tool_name,
-                    "memoryUpdated": False,
-                }
-
-            tool = self.tools[plan.tool_name]
-
-            # Stage 4: Verifying (Permission Gate & Security Authorization)
-            is_confirmed = bool(context.get("confirmed", False)) if context else False
-            authorized, reason, risk_level = self.security.evaluate(
-                tool_name=plan.tool_name,
-                action=plan.action,
-                params=plan.params,
-                user_confirmed=is_confirmed,
-            )
-
-            if not authorized:
-                return {
-                    "success": False,
-                    "intent": intent,
-                    "action": "PERMISSION_DENIED",
-                    "response": f"Security restriction: {reason}",
-                    "data": {"risk_level": risk_level.value, "reason": reason},
-                    "toolUsed": tool_used,
-                    "memoryUpdated": False,
-                }
-
-            # Safe Execution
+            # Memory Update
             try:
-                tool_result = await tool.execute(plan.params, active_context)
-                action_name = tool_result.get("action", plan.action)
-            except Exception as e:
-                logger.error("Tool execution failed: %s", str(e), exc_info=True)
-                return {
-                    "success": False,
-                    "intent": intent,
-                    "action": "TOOL_ERROR",
-                    "response": f"Tool execution encountered an error: {str(e)}",
-                    "data": {},
-                    "toolUsed": tool_used,
-                    "memoryUpdated": False,
-                }
+                self.memory.record_interaction(
+                    sender="user",
+                    text=user_message,
+                    intent=intent,
+                )
+                self.memory.record_interaction(
+                    sender="jarvis",
+                    text=response_text,
+                    intent=intent,
+                    metadata=tool_result,
+                )
+                memory_updated = True
+            except Exception as mem_err:
+                logger.warning("Failed to record conversation context: %s", str(mem_err))
 
-        # Stage 5: Responding (Language Generation & Synthesis)
-        raw_ai_text = None
-        if not tool_result:
-            system_prompt = (
-                "You are Tamizh JARVIS, a personal agentic AI assistant. "
-                "Tagline: Think. Plan. Execute. Learn. "
-                "Be concise, clear, helpful, and proactive."
-            )
-            raw_ai_text = await self.ai.generate(prompt=user_message, system_prompt=system_prompt)
-
-        response_text = self.response_manager.format_response(
-            intent=intent,
-            tool_result=tool_result,
-            raw_ai_text=raw_ai_text,
-            context=active_context,
-        )
-
-        # Memory Update (Context preservation without permanently storing raw unclassified noise)
-        self.memory.record_interaction(
-            sender="user",
-            text=user_message,
-            intent=intent,
-        )
-        self.memory.record_interaction(
-            sender="jarvis",
-            text=response_text,
-            intent=intent,
-            metadata=tool_result,
-        )
-        memory_updated = True
-
-        return {
-            "success": True,
-            "intent": intent,
-            "action": action_name,
-            "response": response_text,
-            "data": tool_result or {},
-            "toolUsed": tool_used or "none",
-            "memoryUpdated": memory_updated,
-        }
+            return {
+                "success": True,
+                "intent": intent,
+                "action": action_name,
+                "response": response_text,
+                "data": tool_result or {},
+                "toolUsed": tool_used or "none",
+                "memoryUpdated": memory_updated,
+            }
+        except Exception as unhandled_exc:
+            logger.error("JarvisCore unhandled exception: %s", str(unhandled_exc), exc_info=True)
+            return {
+                "success": False,
+                "intent": intent,
+                "action": "SYSTEM_ERROR",
+                "response": "An unexpected error occurred while processing your request. Please try again.",
+                "data": {"error": str(unhandled_exc)},
+                "toolUsed": tool_used or "none",
+                "memoryUpdated": False,
+            }

@@ -102,3 +102,39 @@ async def test_coding_tool_missing_code_graceful_handling():
     assert review_res["success"] is True
     assert review_res["data"]["code_provided"] is False
     assert "No code snippet was provided" in review_res["message"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_task_id_handling(agent):
+    """Attempting to complete or delete an invalid task ID returns controlled response."""
+    res = await agent.tools["task_tool"].execute({"action": "complete", "task_id": 99999})
+    assert res["success"] is False
+    assert "not found" in res["message"].lower()
+
+    del_res = await agent.tools["task_tool"].execute({"action": "delete", "task_id": 99999})
+    assert del_res["success"] is False
+    assert "not found" in del_res["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_malformed_ai_response_falls_back_cleanly():
+    """If an AI provider returns malformed JSON, coding tool gracefully falls back to AST inspection."""
+    from tools.coding_tool import CodingTool
+    from ai.provider import AIProvider
+
+    class MalformedAI(AIProvider):
+        @property
+        def name(self): return "malformed"
+        async def is_available(self): return True
+        async def generate(self, prompt, system_prompt=None, json_mode=False):
+            return "This is not valid JSON at all!"
+
+    tool = CodingTool(ai_provider=MalformedAI())
+    res = await tool.execute({
+        "action": "debug",
+        "code": "def foo():\n    return 42",
+        "language": "python"
+    })
+    assert res["success"] is True
+    assert res["data"]["code_provided"] is True
+    assert "Static AST" in res["data"]["analysis_type"]

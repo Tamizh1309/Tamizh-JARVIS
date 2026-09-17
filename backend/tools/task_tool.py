@@ -69,6 +69,9 @@ class TaskTool(BaseTool):
             if not task_id and keyword:
                 pending = await self.memory.long_term.list_tasks(status="PENDING")
                 matched = next((t for t in pending if keyword.lower() in t.get("title", "").lower()), None)
+                if not matched and (keyword.lower() in ["task", "it", "my task"] or len(pending) == 1):
+                    matched = pending[0] if pending else None
+
                 if matched:
                     task_id = matched["id"]
                     task_title = matched["title"]

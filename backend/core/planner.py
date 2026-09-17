@@ -1,4 +1,4 @@
-﻿from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional
 
 
 class TaskPlan:
@@ -15,10 +15,13 @@ class Planner:
     def create_plan(intent: str, entities: Dict[str, Any], context: Dict[str, Any]) -> TaskPlan:
         # 1. Next Best Action
         if intent == "NEXT_BEST_ACTION":
+            params = {"action": "recommend", "type": "next_best_action"}
+            if "available_time" in entities:
+                params["available_time"] = entities["available_time"]
             return TaskPlan(
                 tool_name="study_tool",
                 action="recommend",
-                params={"action": "recommend", "type": "next_best_action"}
+                params=params
             )
 
         # 2. Career & Goals
@@ -40,7 +43,10 @@ class Planner:
             return TaskPlan(
                 tool_name="profile_tool",
                 action=intent.lower(),
-                params={"action": intent.lower()}
+                params={
+                    "action": intent.lower(),
+                    "resume_text": entities.get("resume_text")
+                }
             )
 
         # 4. Mistake Analysis & Weak Topics
@@ -86,25 +92,20 @@ class Planner:
                 }
             )
 
-        # 8. Task Update
-        elif intent == "TASK_UPDATE":
-            return TaskPlan(
-                tool_name="task_tool",
-                action="update",
-                params={
-                    "action": "update",
-                    "keyword": entities.get("target"),
-                    "task_id": entities.get("task_id"),
-                    "status": entities.get("status", "COMPLETED")
-                }
-            )
-
-        # 9. Task List
+        # 8. Task List
         elif intent == "TASK_LIST":
             return TaskPlan(
                 tool_name="task_tool",
                 action="list",
-                params={"action": "list", "status": entities.get("status")}
+                params={"action": "list", "status": "PENDING"}
+            )
+
+        # 9. Task Update
+        elif intent == "TASK_UPDATE":
+            return TaskPlan(
+                tool_name="task_tool",
+                action="update",
+                params=entities
             )
 
         # 10. Reminder
@@ -112,37 +113,31 @@ class Planner:
             return TaskPlan(
                 tool_name="task_tool",
                 action="reminder",
-                params={"action": "reminder", "reminder_text": entities.get("reminder_text", "Reminder")}
+                params={"action": "reminder", "reminder_text": entities.get("reminder_text", "Check important targets")}
             )
 
-        # 11. GATE Revision
+        # 11. Study Plan
+        elif intent == "STUDY_PLAN":
+            return TaskPlan(
+                tool_name="study_tool",
+                action="recommend",
+                params={"action": "recommend", "topic": entities.get("topic", "General")}
+            )
+
+        # 12. GATE Revision
         elif intent == "GATE_REVISION":
             return TaskPlan(
                 tool_name="study_tool",
                 action="plan_revision",
-                params={"action": "plan_revision", "type": "gate_revision_plan"}
+                params={"action": "plan_revision", "exam": "GATE 2026"}
             )
 
-        # 12. GATE Preparation
+        # 13. GATE Preparation
         elif intent == "GATE_PREPARATION":
             return TaskPlan(
                 tool_name="study_tool",
-                action="gate_prep",
-                params={"action": "gate_prep"}
-            )
-
-        # 13. Study Plan
-        elif intent == "STUDY_PLAN":
-            if entities.get("type") == "gate_revision_plan":
-                return TaskPlan(
-                    tool_name="study_tool",
-                    action="plan_revision",
-                    params={"action": "plan_revision"}
-                )
-            return TaskPlan(
-                tool_name="study_tool",
-                action="recommend",
-                params={"action": "recommend", "topic": entities.get("topic")}
+                action="gate_preparation",
+                params={"action": "gate_preparation"}
             )
 
         # 14. DSA Practice
@@ -150,10 +145,10 @@ class Planner:
             return TaskPlan(
                 tool_name="coding_tool",
                 action="dsa_practice",
-                params={"action": "dsa_practice"}
+                params={"action": "dsa_practice", "topic": entities.get("topic", "dsa")}
             )
 
-        # 15. Coding Help & Algorithm Explanation
+        # 15. Coding Help / Algorithm Explanation
         elif intent == "CODING_HELP":
             return TaskPlan(
                 tool_name="coding_tool",
@@ -166,7 +161,12 @@ class Planner:
             return TaskPlan(
                 tool_name="coding_tool",
                 action="debug",
-                params={"action": "debug"}
+                params={
+                    "action": "debug",
+                    "code": entities.get("code"),
+                    "error": entities.get("error"),
+                    "language": entities.get("language", "python")
+                }
             )
 
         # 17. Code Review
@@ -174,18 +174,36 @@ class Planner:
             return TaskPlan(
                 tool_name="coding_tool",
                 action="review",
-                params={"action": "review"}
+                params={
+                    "action": "review",
+                    "code": entities.get("code"),
+                    "language": entities.get("language", "python")
+                }
             )
 
         # 18. Schedule
         elif intent == "SCHEDULE":
             return TaskPlan(
                 tool_name="schedule_tool",
-                action="check_schedule",
-                params={"action": "check_schedule"}
+                action="timetable",
+                params={"action": "timetable"}
             )
 
-        # General Conversation / Fallback
+                # Study Log
+        elif intent == "STUDY_LOG":
+            return TaskPlan(
+                tool_name="study_tool",
+                action="log_session",
+                params={
+                    "action": "log_session",
+                    "subject": entities.get("subject", "Computer Science"),
+                    "topic": entities.get("topic", "Study Session"),
+                    "duration": entities.get("duration", 45),
+                    "notes": entities.get("notes", "Logged via JARVIS NLP interface.")
+                }
+            )
+
+        # Default: General Chat
         return TaskPlan(
             tool_name=None,
             action="respond",

@@ -24,6 +24,8 @@ class ResponseManager:
                 "EXECUTE_TASK",
             ]:
                 title = tool_result.get("title") or tool_result.get("topic") or "Core Study Session"
+                if action == "REVISION_SESSION" and not title.lower().startswith("revise"):
+                    title = f"Revise {title}"
                 duration = tool_result.get("duration_minutes", 45)
                 reason = tool_result.get("reason", "")
                 return f"Next Best Action: {title} ({duration} mins). {reason}".strip()
@@ -46,8 +48,14 @@ class ResponseManager:
                     return "You currently have no recorded weak topics. Excellent work!"
                 return "Your current weak topics requiring priority revision are:\n" + "\n".join([f"  {t}" for t in topics])
 
-            if action == "gate_revision_plan":
-                return tool_result.get("recommendation", "GATE revision plan prepared.")
+            if action in ["gate_revision_plan", "plan_revision"]:
+                return tool_result.get("message") or tool_result.get("recommendation", "GATE revision plan prepared.")
+
+            if action in ["study_recommendation", "recommend"]:
+                topic = tool_result.get("topic", "Computer Science")
+                mins = tool_result.get("recommended_minutes", 45)
+                reason = tool_result.get("reason", "")
+                return f"Study Recommendation: Revise {topic} for {mins} minutes. {reason}".strip()
 
             if action == "gate_preparation":
                 return tool_result.get("message", "GATE 2026 preparation roadmap ready.")
@@ -72,6 +80,9 @@ class ResponseManager:
                 if code:
                     res += f"\n\n**Implementation:**\n```python\n{code}\n```"
                 return res
+
+            if action == "session_logged":
+                return f"Logged study session: {tool_result.get('duration')} minutes on '{tool_result.get('topic')}' in {tool_result.get('subject')}."
 
             if action == "task_created":
                 return f"Created task: \"{tool_result.get('title')}\" [Priority: {tool_result.get('priority')}]."

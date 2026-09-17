@@ -25,6 +25,7 @@ ALL_INTENTS = [
     "INTERVIEW",
     "RESUME",
     "SCHEDULE",
+    "STUDY_LOG",
 ]
 
 

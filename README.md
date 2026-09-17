@@ -1,172 +1,67 @@
-﻿# TAMIZH JARVIS
+# Tamizh JARVIS — Personal Agentic AI Assistant
 
-> **Think. Plan. Execute. Learn.**
+[![CI/CD Suite & Agent Validation](https://github.com/Tamizh1309/Tamizh-JARVIS/actions/workflows/ci.yml/badge.svg)](https://github.com/Tamizh1309/Tamizh-JARVIS/actions/workflows/ci.yml)
+[![Live Dashboard](https://img.shields.io/badge/Live-GitHub%20Pages-00f2fe)](https://tamizh1309.github.io/Tamizh-JARVIS/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776ab)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev)
 
-**Tamizh JARVIS** is a personal, modular, and secure agentic AI assistant designed for productivity, study, coding, career development, and controlled assistance.
+> **Tagline:** Think. Plan. Execute. Learn.
 
-Repository: [https://github.com/Tamizh1309/Tamizh-JARVIS](https://github.com/Tamizh1309/Tamizh-JARVIS)
-
----
-
-## Architecture Overview
-
-```text
-User Input (Text / Voice / API)
-              │
-              ▼
-   TAMIZH JARVIS Core Engine
-              │
-    ┌─────────┴─────────┐
-    │   Intent Router   │  (21 Core Deterministic & AI Intents)
-    └─────────┬─────────┘
-              ▼
-    ┌───────────────────┐
-    │ Planner & Scoring │ ◄───► Memory & Persistence (SQLite Async)
-    └─────────┬─────────┘
-              ▼
-    ┌───────────────────┐
-    │  Security Layer   │ ────► Permission Gate & Risk Classifier (LOW/MED/HIGH/CRITICAL)
-    └─────────┬─────────┘
-              ▼
-    ┌───────────────────┐
-    │   Tool Executor   │ ────► TaskTool, StudyTool, ScheduleTool, CodingTool, ProfileTool
-    └─────────┬─────────┘
-              ▼
-    ┌───────────────────┐
-    │  Response Manager │ ────► Clean Synthesis & Telemetry Update
-    └───────────────────┘
-```
+Tamizh JARVIS is a personal agentic artificial intelligence system designed for engineering productivity, GATE CS preparation, algorithmic coding mastery, and career roadmap execution.
 
 ---
 
-## Implementation Status (Phase 4 Verified)
+## Current Architecture & Capabilities (Phase 7 Production-Ready)
 
-| Component | Status | Verification & Capabilities |
+| Subsystem | Status | Implementation Details |
 |---|---|---|
-| **AI Provider Layer** | ✅ Implemented & Tested | `AUTO`, `GEMINI`, `LOCAL`, `FALLBACK`. Automatic failover, credential masking, timeout/rate-limit shielding. |
-| **Chat API (`POST /api/chat`)** | ✅ Implemented & Tested | Returns `{success, intent, action, response, data, toolUsed, memoryUpdated}`. |
-| **Intent Router** | ✅ Implemented & Tested | All 21 core intents with deterministic rules, structured entity extraction, and AI fallback. |
-| **Task Engine** | ✅ Implemented & Tested | Schema: `(id, title, description, status, priority, created_at, due_at, completed_at, category, source)`. Full CRUD + completion in SQLite. |
-| **Long-Term Memory** | ✅ Implemented & Tested | 14 memory domains with SQLite persistence across restarts: `USER_PROFILE`, `GOALS`, `PREFERENCES`, `STUDY_HISTORY`, `TOPIC_MASTERY`, `MISTAKES`, `TASKS`, etc. |
-| **Study & GATE Engine** | ✅ Implemented & Tested | Real study session logging, weak topic tracking, GATE CS revision plans, dynamic study hours calculation. |
-| **Next Best Action Engine** | ✅ Implemented & Tested | Multi-factor deterministic scoring based on deadlines, weak topics, study history, and career goals. Non-fixed, explainable. |
-| **Daily Briefing (`GET /api/study/briefing`)** | ✅ Implemented & Tested | Dynamic calculation from database: active pending tasks, target study hours, completed study hours, completion percentage. |
-| **Security & Permissions** | ✅ Implemented & Tested | 4-tier risk classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`). Prohibits raw shell execution. Requires confirmation for high-risk actions. |
-| **Frontend UI (React + Vite)** | ✅ Implemented & Tested | Dark-first dashboard connected to real backend APIs with `VITE_API_BASE_URL` support. |
-| **Automated Test Suite** | ✅ Implemented & Tested | 50 automated tests passing with pytest (`tests/test_*.py`). |
+| **JarvisCore Engine** | `[IMPLEMENTED]` | 5-stage lifecycle (`Thinking` → `Planning` → `Verifying` → `Executing` → `Responding`) with stable structured JSON schema. |
+| **Tool Registry** | `[IMPLEMENTED]` | 6 active tools (`task_tool`, `study_tool`, `schedule_tool`, `progress_tool`, `profile_tool`, `coding_tool`) validated via automated test suite. |
+| **Deterministic Next Best Action** | `[IMPLEMENTED]` | Multi-factor mathematical scoring evaluating deadline urgency, goal relevance, weakness priority, and available time. |
+| **Memory Classification** | `[IMPLEMENTED]` | Domain-classified storage across `USER_PROFILE`, `GOAL`, `PREFERENCE`, `TASK`, `STUDY`, `ACHIEVEMENT`, `MISTAKE`, `REVISION`, `CONVERSATION_CONTEXT`. |
+| **SQLite Persistence** | `[IMPLEMENTED]` | Asynchronous database driver (`aiosqlite`) persisting tasks, study sessions, and memory across restarts. |
+| **Personalized Coding Assistant** | `[IMPLEMENTED]` | Dynamic DSA plans filtered by weak topics, AST/AI code debugging with fixes/complexity, and production code review. |
+| **Security Gates** | `[IMPLEMENTED]` | 4-tier risk classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`), parameter sanitization, and shell injection blocking. |
+| **Futuristic Dashboard** | `[IMPLEMENTED]` | Cyberpunk HUD interface in React + Vite with real-time telemetry, agent state transitions, and live backend connection. |
 
 ---
 
-## Project Structure
+## End-to-End Verification
 
-```
-Tamizh-JARVIS/
-├── backend/
-│   ├── ai/
-│   │   ├── provider.py            # AIProvider abstract base & factory
-│   │   ├── gemini_provider.py     # Hardened Google Gemini 1.5/2.5 client
-│   │   ├── local_provider.py      # Ollama/Local REST LLM client
-│   │   └── fallback_provider.py   # Resilient offline deterministic engine
-│   ├── api/
-│   │   ├── chat.py                # POST /api/chat endpoint
-│   │   ├── health.py              # GET /api/health endpoint
-│   │   ├── tasks.py               # Task CRUD endpoints
-│   │   ├── study.py               # Next action & briefing endpoints
-│   │   └── memory.py              # Memory query and persistence endpoints
-│   ├── core/
-│   │   ├── jarvis_core.py         # Master agentic lifecycle orchestrator
-│   │   ├── router.py              # 21-intent semantic router
-│   │   ├── planner.py             # Multi-step task planner
-│   │   ├── decision_engine.py     # Deterministic NBA scoring engine
-│   │   ├── context_manager.py     # Session & memory context builder
-│   │   └── response_manager.py    # Structured response formatter
-│   ├── memory/
-│   │   ├── memory_manager.py      # Memory coordinator
-│   │   ├── long_term_memory.py    # SQLite async driver (aiosqlite)
-│   │   ├── profile_memory.py      # Persistent user goals and profile
-│   │   └── conversation_memory.py # Sliding context buffer
-│   ├── security/
-│   │   ├── permission_manager.py  # Action authorization & confirmation gate
-│   │   ├── risk_classifier.py     # 4-tier risk classification
-│   │   └── action_validator.py    # Parameter validation & injection guard
-│   ├── tools/
-│   │   ├── base_tool.py           # Base tool interface
-│   │   ├── task_tool.py           # Task management tool
-│   │   ├── study_tool.py          # GATE study and weak-topic tool
-│   │   ├── coding_tool.py         # DSA & algorithm explanation tool
-│   │   ├── profile_tool.py        # Goal setting & career roadmap tool
-│   │   ├── progress_tool.py       # Metrics & briefing calculation tool
-│   │   └── schedule_tool.py       # Calendar & time-slot tool
-│   ├── config/
-│   │   └── settings.py            # Pydantic environment configuration
-│   └── main.py                    # FastAPI application entrypoint
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx                # React dashboard with API integration
-│   │   ├── index.css              # Futuristic dark-first stylesheet
-│   │   └── main.jsx               # React mount entrypoint
-│   ├── package.json               # Frontend dependencies
-│   └── vite.config.js             # Vite proxy and base URL config
-├── tests/
-│   ├── test_chat.py               # Chat API & intent verification tests
-│   ├── test_router.py             # 21-intent router tests
-│   ├── test_planner.py            # Plan formulation tests
-│   ├── test_memory.py             # Memory persistence across restarts tests
-│   ├── test_tools.py              # Tool execution tests
-│   ├── test_security.py            # Risk tiers and injection prevention tests
-│   ├── test_study.py               # Study data calculations tests
-│   └── test_decision_engine.py    # Scoring engine tests
-└── docs/
-    ├── ARCHITECTURE.md            # Detailed system design
-    ├── API.md                     # REST API reference
-    ├── SECURITY.md                # Threat model and security policies
-    ├── DEVELOPMENT.md             # Developer setup and testing guide
-    └── ROADMAP.md                 # Project milestones
-```
+JARVIS supports natural language interaction across all core workflows:
+1. **Career Goals:** `"My career goal is to become a Software Engineer."` → Persisted to SQLite.
+2. **Goal Retrieval:** `"What is my career goal?"` → Dynamically loaded from database.
+3. **Task Engine:** `"Create a task to solve 3 LeetCode problems today."` → SQLite record created.
+4. **Task Listing:** `"List my pending tasks."` → Backlog rendered with priorities.
+5. **Next Best Action:** `"What should I study now?"` → Evaluated dynamically via DecisionEngine.
+6. **Study Logging:** `"Log 45 minutes of DBMS Transactions study."` → Saved in `study_sessions`.
+7. **Weak Topics:** `"What are my weak topics?"` → Spaced repetition retention tracker.
+8. **GATE Revision:** `"Plan my GATE revision."` → 3-block 90-minute structured revision.
+9. **DSA Practice:** `"Give me DSA practice."` → Pattern-based problem solving recommendations.
+10. **Algorithm Explanation:** `"Explain binary search."` → Intuition, time/space complexity, and code.
 
 ---
 
-## Local Run Commands
+## Local Development & Testing
 
-### 1. Backend Server (FastAPI)
 ```bash
-cd backend
-# Create virtual environment if not present
-python -m venv .venv
-source .venv/bin/activate  # Or on Windows: .venv\Scripts\activate
-
-# Install dependencies
+# 1. Install dependencies
 pip install -r requirements.txt
+cd frontend && npm install && cd ..
 
-# Run FastAPI with live reload on http://127.0.0.1:8000
-python main.py
-```
+# 2. Run automated test suite
+pytest -q
 
-### 2. Frontend Application (React + Vite)
-```bash
-cd frontend
-npm install
-npm run dev
-# Running on http://localhost:5173 (proxies /api to backend)
-```
+# 3. Start Backend Server
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 
-### 3. Running Test Suites
-```bash
-# Run pytest with venv python
-python -m pytest -q
+# 4. Start Frontend
+cd frontend && npm run dev
 ```
 
 ---
 
-## Production Deployment Architecture
+## License
 
-- **Frontend (GitHub Pages)**:
-  Static production bundle built with `npm run build` is published to the `gh-pages` branch.
-  Configure environment variable `VITE_API_BASE_URL=https://<your-backend-domain>` to direct frontend requests to the deployed backend.
-- **Backend (Render / Railway / Cloud VPS)**:
-  Deploy the FastAPI application using Uvicorn or Docker.
-  Set environment variables:
-  - `APP_ENV=production`
-  - `PORT=8000`
-  - `GEMINI_API_KEY=<your-key>`
-  - `ALLOWED_ORIGINS=https://tamizh1309.github.io,http://localhost:5173`
+MIT License. Copyright (c) 2026 Tamizharasan E.

@@ -152,8 +152,12 @@ class LongTermMemory:
         query = "SELECT * FROM tasks WHERE 1=1"
         params = []
         if status:
-            query += " AND status = ?"
-            params.append(status.upper())
+            st = status.upper()
+            if st in ["TODO", "PENDING"]:
+                query += " AND status IN ('PENDING', 'TODO')"
+            else:
+                query += " AND status = ?"
+                params.append(st)
         if category:
             query += " AND category = ?"
             params.append(category.upper())
@@ -326,10 +330,11 @@ class LongTermMemory:
         duration_minutes: int,
         notes: str = "",
         session_type: str = "STUDY",
-        score: float = 0.0
+        score: float = 0.0,
+        timestamp: Optional[str] = None
     ) -> int:
         await self.init_db()
-        now = datetime.now().isoformat()
+        now = timestamp or datetime.now().isoformat()
         db = await self.get_connection()
         cursor = await db.execute(
             """INSERT INTO study_sessions 

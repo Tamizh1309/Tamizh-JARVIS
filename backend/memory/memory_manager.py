@@ -1,11 +1,25 @@
-﻿from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List
 from memory.profile_memory import ProfileMemory
 from memory.conversation_memory import ConversationMemory
 from memory.long_term_memory import LongTermMemory
 
+VALID_MEMORY_DOMAINS = {
+    "USER_PROFILE",
+    "PROFILE",
+    "GOAL",
+    "GOALS",
+    "PREFERENCE",
+    "TASK",
+    "STUDY",
+    "ACHIEVEMENT",
+    "MISTAKE",
+    "REVISION",
+    "CONVERSATION_CONTEXT"
+}
+
 
 class MemoryManager:
-    """Coordinates profile, conversational context, and persistent storage across the 14 memory domains."""
+    """Coordinates profile, conversational context, and persistent storage across the core memory domains."""
 
     def __init__(self, db_path: Optional[str] = None):
         self.long_term = LongTermMemory(db_path=db_path)
@@ -23,6 +37,7 @@ class MemoryManager:
         return self.conversation.get_recent(count=count)
 
     def record_interaction(self, sender: str, text: str, intent: str = None, metadata: dict = None):
+        """Stores short-term conversation context in memory without polluting long-term SQLite database."""
         self.conversation.add_turn(sender, text, intent, metadata)
 
     async def get_active_context_summary(self) -> dict:
@@ -39,26 +54,37 @@ class MemoryManager:
             "pending_tasks_count": len(tasks),
             "pending_tasks": tasks[:5],
             "weak_topics": profile.weak_topics,
+            "current_subjects": profile.current_subjects,
         }
 
-    # --- Direct CRUD and Search Interface (Phase 4 Section 6) ---
+    # --- Domain-Classified CRUD & Search Interface ---
 
     async def create(self, category: str, key: str, value: Any, metadata: Optional[Dict[str, Any]] = None) -> bool:
         await self.initialize()
-        return await self.long_term.create_memory(category, key, value, metadata)
+        domain = category.upper().strip()
+        return await self.long_term.create_memory(domain, key, value, metadata)
 
     async def read(self, category: str, key: str) -> Optional[Dict[str, Any]]:
         await self.initialize()
-        return await self.long_term.read_memory(category, key)
+        domain = category.upper().strip()
+        return await self.long_term.read_memory(domain, key)
 
     async def update(self, category: str, key: str, value: Any, metadata: Optional[Dict[str, Any]] = None) -> bool:
         await self.initialize()
-        return await self.long_term.update_memory(category, key, value, metadata)
+        domain = category.upper().strip()
+        return await self.long_term.update_memory(domain, key, value, metadata)
 
     async def delete(self, category: str, key: str) -> bool:
         await self.initialize()
-        return await self.long_term.delete_memory(category, key)
+        domain = category.upper().strip()
+        return await self.long_term.delete_memory(domain, key)
 
     async def search(self, query: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
         await self.initialize()
-        return await self.long_term.search_memory(query, category)
+        domain = category.upper().strip() if category else None
+        return await self.long_term.search_memory(query, domain)
+
+    async def list_by_domain(self, domain: str) -> List[Dict[str, Any]]:
+        await self.initialize()
+        domain = domain.upper().strip()
+        return await self.long_term.list_memory_by_category(domain)

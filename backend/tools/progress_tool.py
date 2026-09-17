@@ -25,13 +25,19 @@ class ProgressTool(BaseTool):
         percentage = min(100, int((today_hours / target_hours) * 100)) if target_hours > 0 else 0
 
         pending_tasks = await self.memory.long_term.list_tasks(status="PENDING")
+        priority_items = [t for t in pending_tasks if t.get("priority") == "HIGH"]
+        study_sessions = await self.memory.long_term.get_study_history(limit=5)
 
         msg = f"Daily Briefing: {len(pending_tasks)} pending tasks, {today_hours}h / {target_hours}h studied ({percentage}% complete)."
         data = {
             "pending_tasks_count": len(pending_tasks),
+            "pending_tasks": pending_tasks,
+            "priority_items": priority_items,
             "today_study_hours": today_hours,
+            "completed_study_hours": today_hours,
             "target_study_hours": target_hours,
             "completion_percentage": percentage,
+            "study_sessions": study_sessions,
         }
         return self.format_output(
             success=True,

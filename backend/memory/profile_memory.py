@@ -1,4 +1,4 @@
-﻿from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -23,6 +23,10 @@ class UserProfile(BaseModel):
         ]
     )
     preferred_study_slot_mins: int = 45
+    skills: Optional[List[str]] = None
+    experience: Optional[List[str]] = None
+    projects: Optional[List[str]] = None
+    achievements: Optional[List[str]] = None
 
 
 class ProfileMemory:
@@ -41,8 +45,10 @@ class ProfileMemory:
                     self._profile = UserProfile(**record["value"])
                 except Exception:
                     pass
-            # Also check if GOALS record exists
+            # Check if GOAL or GOALS record exists
             goal_rec = await self.long_term.read_memory("GOALS", "primary_goal")
+            if not goal_rec:
+                goal_rec = await self.long_term.read_memory("GOAL", "primary_goal")
             if goal_rec and isinstance(goal_rec.get("value"), str):
                 self._profile.primary_goal = goal_rec["value"]
 
@@ -57,12 +63,14 @@ class ProfileMemory:
             await self.long_term.create_memory("USER_PROFILE", "main", self._profile.model_dump())
             if "primary_goal" in updates:
                 await self.long_term.create_memory("GOALS", "primary_goal", updates["primary_goal"])
+                await self.long_term.create_memory("GOAL", "primary_goal", updates["primary_goal"])
         return self._profile
 
     async def set_goal(self, goal: str) -> UserProfile:
         self._profile.primary_goal = goal.strip()
         if self.long_term:
             await self.long_term.create_memory("GOALS", "primary_goal", self._profile.primary_goal)
+            await self.long_term.create_memory("GOAL", "primary_goal", self._profile.primary_goal)
             await self.long_term.create_memory("USER_PROFILE", "main", self._profile.model_dump())
         return self._profile
 
