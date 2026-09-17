@@ -19,10 +19,22 @@ import {
   Plus,
   CheckCircle2,
   Trash2,
-  Play
+  Play,
+  Server
 } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const ENV_API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
+function getApiBaseUrl() {
+  if (ENV_API_BASE) return ENV_API_BASE;
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('jarvis_api_base_url');
+    if (saved) return saved.replace(/\/+$/, "");
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocal) return "";
+  }
+  return null;
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('chat');
@@ -37,40 +49,54 @@ export default function App() {
     }
   ]);
   const [inputVal, setInputVal] = useState('');
-  const [aiState, setAiState] = useState('Online');
+  const [aiState, setAiState] = useState('Initializing...');
+  const [customApiUrl, setCustomApiUrl] = useState(localStorage.getItem('jarvis_api_base_url') || '');
 
   // Dynamic Backend Data States
   const [nextBestAction, setNextBestAction] = useState({
-    title: "Loading recommendation...",
-    reason: "Connecting to JARVIS Decision Engine...",
+    title: "Revise DBMS Transactions",
+    reason: "Revision interval is due based on recent performance in DBMS and your GATE roadmap.",
     priority: "HIGH",
     duration_minutes: 45,
-    action: "FOCUS_STUDY"
+    action: "REVISION_SESSION"
   });
 
   const [dailyBriefing, setDailyBriefing] = useState({
-    pending_tasks_count: 0,
+    pending_tasks_count: 3,
     target_study_hours: 3.5,
-    today_study_hours: 0,
-    completion_percentage: 0
+    today_study_hours: 1.5,
+    completion_percentage: 42
   });
 
-  const [tasksList, setTasksList] = useState([]);
+  const [tasksList, setTasksList] = useState([
+    { id: 1, title: "Revise DBMS Transactions", priority: "HIGH", status: "PENDING", description: "Review ACID properties and 2PL locking protocols." },
+    { id: 2, title: "Solve 2 DSA Dynamic Programming problems", priority: "MEDIUM", status: "PENDING", description: "Focus on 0/1 Knapsack and LCS variants." },
+    { id: 3, title: "Complete Computer Networks Quiz 4", priority: "LOW", status: "PENDING", description: "TCP sliding window and congestion control." }
+  ]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
 
   // Fetch telemetry and tasks from backend
   const refreshTelemetry = async () => {
+    const baseUrl = getApiBaseUrl();
+    if (baseUrl === null) {
+      setAiState('Web Client (Standalone)');
+      return;
+    }
+
     try {
       // 1. Fetch Health
-      const healthRes = await fetch(`${API_BASE_URL}/api/health`);
+      const healthRes = await fetch(`${baseUrl}/api/health`);
       if (healthRes.ok) {
         const healthData = await healthRes.json();
         setHealth(healthData);
         setAiState('Online');
+      } else {
+        setAiState('Offline Mode');
+        return;
       }
 
       // 2. Fetch Next Best Action from Backend
-      const nbaRes = await fetch(`${API_BASE_URL}/api/study/next-action`);
+      const nbaRes = await fetch(`${baseUrl}/api/study/next-action`);
       if (nbaRes.ok) {
         const nbaData = await nbaRes.json();
         if (nbaData.success) {
@@ -85,7 +111,7 @@ export default function App() {
       }
 
       // 3. Fetch Daily Briefing from Backend
-      const briefingRes = await fetch(`${API_BASE_URL}/api/study/briefing`);
+      const briefingRes = await fetch(`${baseUrl}/api/study/briefing`);
       if (briefingRes.ok) {
         const briefingData = await briefingRes.json();
         if (briefingData.success) {
@@ -99,7 +125,7 @@ export default function App() {
       }
 
       // 4. Fetch Tasks List
-      const tasksRes = await fetch(`${API_BASE_URL}/api/tasks`);
+      const tasksRes = await fetch(`${baseUrl}/api/tasks`);
       if (tasksRes.ok) {
         const tasksData = await tasksRes.json();
         if (tasksData.success) {
@@ -117,6 +143,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleSaveApiUrl = (e) => {
+    e.preventDefault();
+    if (customApiUrl.trim()) {
+      localStorage.setItem('jarvis_api_base_url', customApiUrl.trim());
+    } else {
+      localStorage.removeItem('jarvis_api_base_url');
+    }
+    refreshTelemetry();
+  };
+
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!inputVal.trim()) return;
@@ -133,11 +169,46 @@ export default function App() {
     setInputVal('');
     setAiState('Thinking');
 
+    const baseUrl = getApiBaseUrl();
+
+    // If no backend connected on static host, answer with local deterministic response
+    if (baseUrl === null) {
+      setTimeout(() => {
+        setAiState('Web Client (Standalone)');
+        let reply = `I received your request: "${userMessageText}".`;
+        const lower = userMessageText.toLowerCase();
+
+        if (lower.includes('next best') || lower.includes('study')) {
+          reply = "Based on your study profile, your Next Best Action is: Revise DBMS Transactions (45 mins).";
+        } else if (lower.includes('binary search')) {
+          reply = "Binary Search is an O(log N) divide-and-conquer algorithm for sorted arrays that narrows the search range in half on each comparison.";
+        } else if (lower.includes('goal')) {
+          reply = "Your primary objective is Software Engineering & GATE Computer Science mastery.";
+        } else if (lower.includes('task')) {
+          reply = "Task engine is ready. Connect a live FastAPI backend in Settings to enable full SQLite persistence.";
+        } else {
+          reply = "Greetings! Tamizh JARVIS is active. To connect full agentic SQLite persistence and AI models, set your backend URL in Settings & Security.";
+        }
+
+        setMessages(prev => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            sender: 'jarvis',
+            text: reply,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            intent: 'CLIENT_RESPONSE',
+            toolUsed: 'client_engine'
+          }
+        ]);
+      }, 300);
+      return;
+    }
+
     try {
-      // Step-by-step safe status indicator progression
       setTimeout(() => setAiState('Planning'), 200);
 
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const response = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,13 +245,13 @@ export default function App() {
       }, 300);
 
     } catch (error) {
-      setAiState('Online');
+      setAiState('Offline Mode');
       setMessages(prev => [
         ...prev,
         {
           id: Date.now() + 1,
           sender: 'jarvis',
-          text: `Error connecting to JARVIS backend: ${error.message}. Please verify the server is running.`,
+          text: `Backend connection issue (${error.message}). Please verify the server is running.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           intent: 'ERROR'
         }
@@ -191,8 +262,23 @@ export default function App() {
   const handleCreateTaskDirect = async (e) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
+
+    const baseUrl = getApiBaseUrl();
+    if (baseUrl === null) {
+      const newTask = {
+        id: Date.now(),
+        title: newTaskTitle.trim(),
+        priority: 'MEDIUM',
+        status: 'PENDING',
+        description: 'Locally queued task.'
+      };
+      setTasksList(prev => [newTask, ...prev]);
+      setNewTaskTitle('');
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tasks`, {
+      const res = await fetch(`${baseUrl}/api/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: newTaskTitle, priority: 'MEDIUM' })
@@ -207,8 +293,14 @@ export default function App() {
   };
 
   const handleCompleteTask = async (taskId) => {
+    const baseUrl = getApiBaseUrl();
+    if (baseUrl === null) {
+      setTasksList(prev => prev.map(t => t.id === taskId ? { ...t, status: 'COMPLETED' } : t));
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/complete`, {
+      const res = await fetch(`${baseUrl}/api/tasks/${taskId}/complete`, {
         method: 'POST'
       });
       if (res.ok) {
@@ -220,8 +312,14 @@ export default function App() {
   };
 
   const handleDeleteTask = async (taskId) => {
+    const baseUrl = getApiBaseUrl();
+    if (baseUrl === null) {
+      setTasksList(prev => prev.filter(t => t.id !== taskId));
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+      const res = await fetch(`${baseUrl}/api/tasks/${taskId}`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -296,7 +394,7 @@ export default function App() {
               <span>{aiState}</span>
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              Provider: {health?.ai_provider || 'Active Engine'}
+              Provider: {health?.ai_provider || (getApiBaseUrl() ? 'Connecting' : 'Client Mode')}
             </div>
           </div>
         </header>
@@ -460,8 +558,36 @@ export default function App() {
           <div className="tab-view-container">
             <div>
               <h2 className="tab-header-title"><Settings size={22} color="var(--accent-cyan)" /> Settings & Security</h2>
-              <p className="tab-header-desc">System security, risk classifier policies, and AI provider configuration.</p>
+              <p className="tab-header-desc">Configure backend API connection, permissions, and security policies.</p>
             </div>
+
+            {/* Custom Backend URL Configuration */}
+            <div className="widget-card" style={{ marginBottom: '1.5rem', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
+              <div className="widget-title" style={{ fontSize: '0.9rem' }}>
+                <Server size={16} />
+                <span>Backend API Connection</span>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Connect your deployed FastAPI backend (e.g., Render, Railway, or local <code>http://127.0.0.1:8000</code>).
+              </p>
+              <form onSubmit={handleSaveApiUrl} style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="https://your-deployed-backend.com or http://127.0.0.1:8000"
+                  value={customApiUrl}
+                  onChange={e => setCustomApiUrl(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button type="submit" className="form-btn">
+                  Save & Connect
+                </button>
+              </form>
+              <div style={{ marginTop: '8px', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                Active API Base: <code>{getApiBaseUrl() || "(Local Proxy / Web Client)"}</code>
+              </div>
+            </div>
+
             <div className="card-grid">
               <div className="item-card">
                 <div className="item-card-title">Risk Classifier Policy</div>
@@ -475,7 +601,7 @@ export default function App() {
               <div className="item-card">
                 <div className="item-card-title">AI Provider Config</div>
                 <div className="item-card-desc">
-                  Active Provider: <strong>{health?.ai_provider || 'fallback'}</strong><br />
+                  Active Provider: <strong>{health?.ai_provider || (getApiBaseUrl() ? 'Connecting' : 'Client Mode')}</strong><br />
                   Supported: Gemini API, Ollama Local, Fallback Deterministic Engine.
                 </div>
               </div>
