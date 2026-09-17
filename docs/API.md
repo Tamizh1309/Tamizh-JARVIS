@@ -1,94 +1,115 @@
-# Tamizh JARVIS API Documentation
+﻿# TAMIZH JARVIS — REST API REFERENCE
 
-All API endpoints are prefixed with `/api`.
-
----
-
-## 1. System & Health
-
-### `GET /api/health`
-Returns the status, service name, version, and active AI provider state.
-
-**Response**:
-```json
-{
-  "status": "ok",
-  "service": "Tamizh JARVIS",
-  "version": "1.0.0",
-  "environment": "development",
-  "ai_provider": "fallback"
-}
-```
+All endpoints are hosted at `/api`. In development, requests are served on `http://127.0.0.1:8000`.
 
 ---
 
-## 2. Agentic Chat & Core Interaction
+## 1. Chat & Agentic Execution
 
 ### `POST /api/chat`
-Sends a query to the Tamizh JARVIS agentic core engine.
+Main conversational and agentic entrypoint. Accepts user query, evaluates intent, checks permissions, executes tools if necessary, records memory, and synthesizes structured response.
 
-**Request**:
+**Request Body:**
 ```json
 {
-  "message": "What should I study now?",
-  "context": {}
+  "message": "Create a task to solve 3 LeetCode problems today",
+  "context": {
+    "confirmed": false
+  }
 }
 ```
 
-**Response**:
+**Response (200 OK):**
 ```json
 {
   "success": true,
-  "intent": "NEXT_BEST_ACTION",
-  "action": "REVISION_SESSION",
-  "response": "Next Best Action: Revise DBMS Transactions & Concurrency Control for 45 minutes. Revision interval is due and recent performance indicates this weak topic needs reinforcement.",
+  "intent": "TASK_CREATE",
+  "action": "task_created",
+  "response": "Created task: \"Solve 3 LeetCode problems today\" [Priority: MEDIUM].",
   "data": {
     "success": true,
-    "action": "REVISION_SESSION",
-    "subject": "Database Management Systems",
-    "topic": "DBMS Transactions & Concurrency Control",
-    "duration_minutes": 45,
-    "priority": "HIGH",
-    "reason": "Revision interval is due and recent performance indicates this weak topic needs reinforcement."
+    "action": "task_created",
+    "task_id": 4,
+    "title": "Solve 3 LeetCode problems today",
+    "priority": "MEDIUM",
+    "category": "GENERAL",
+    "message": "Task 'Solve 3 LeetCode problems today' created successfully [Priority: MEDIUM]."
   },
-  "toolUsed": "study_tool",
+  "toolUsed": "task_tool",
   "memoryUpdated": true
 }
 ```
 
 ---
 
-## 3. Study Intelligence
+## 2. Health & Telemetry
+
+### `GET /api/health`
+Returns system status, active environment, version, and current AI provider.
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok",
+  "service": "Tamizh JARVIS",
+  "version": "1.0.0",
+  "environment": "development",
+  "ai_provider": "gemini"
+}
+```
+
+---
+
+## 3. Study & Decision Intelligence
 
 ### `GET /api/study/next-action`
-Computes and returns the transparent Next Best Action from the deterministic decision engine.
+Computes the dynamic Next Best Action using the multi-factor deterministic scoring engine.
 
-**Response**:
+**Response (200 OK):**
 ```json
 {
   "success": true,
-  "action": "EXECUTE_HIGH_PRIORITY_TASK",
-  "title": "Revise DBMS Transactions",
+  "action": "REVISION_SESSION",
+  "title": "Revise DBMS Transactions & Concurrency Control",
   "duration_minutes": 45,
   "priority": "HIGH",
-  "reason": "High priority task pending in your backlog: 'Revise DBMS Transactions'.",
-  "description": "Review ACID properties and 2PL locking protocols."
+  "reason": "Spaced revision is due for weak topic 'DBMS Transactions & Concurrency Control' to maintain retention curve.",
+  "description": "Targeted focus block on DBMS Transactions & Concurrency Control with active recall and PYQ practice."
 }
 ```
 
 ### `GET /api/study/briefing`
-Aggregates and returns daily study and task metrics.
+Returns structured daily progress computed directly from SQLite.
 
-**Response**:
+**Response (200 OK):**
 ```json
 {
   "success": true,
   "action": "daily_briefing",
-  "pending_tasks_count": 6,
-  "today_study_hours": 0.0,
+  "pending_tasks_count": 3,
+  "today_study_hours": 1.5,
   "target_study_hours": 3.5,
-  "completion_percentage": 0,
-  "message": "Daily Briefing: 6 pending tasks, 0.0h / 3.5h studied (0% complete)."
+  "completion_percentage": 42,
+  "message": "Daily Briefing: 3 pending tasks, 1.5h / 3.5h studied (42% complete)."
+}
+```
+
+### `GET /api/study/history`
+Returns logged study sessions in reverse chronological order.
+
+### `GET /api/study/weak-topics`
+Returns list of weak topics and recorded mistakes.
+
+### `POST /api/study/session`
+Logs a completed study session into SQLite.
+
+**Request Body:**
+```json
+{
+  "subject": "Operating Systems",
+  "topic": "Deadlocks & Bankers Algorithm",
+  "duration": 45,
+  "notes": "Covered 4 conditions and safety check algorithm."
 }
 ```
 
@@ -96,24 +117,45 @@ Aggregates and returns daily study and task metrics.
 
 ## 4. Task Management
 
-### `GET /api/tasks?status=PENDING`
-Returns tasks from SQLite storage.
+### `GET /api/tasks`
+Lists tasks with optional filtering by `status`, `category`, and `limit`.
 
 ### `POST /api/tasks`
-Creates a new task.
+Creates a new task with complete schema.
 
-**Request**:
+**Request Body:**
 ```json
 {
-  "title": "Solve 3 LeetCode dynamic programming problems",
-  "description": "0/1 knapsack and coin change variants",
-  "priority": "HIGH"
+  "title": "Practice 10 GATE CSE PYQs",
+  "description": "Focus on Computer Networks subnetting questions",
+  "priority": "HIGH",
+  "due_at": "2026-10-01",
+  "category": "GATE",
+  "source": "USER"
 }
 ```
 
+### `PATCH /api/tasks/{task_id}`
+Updates task attributes (`title`, `description`, `status`, `priority`, `due_at`, `category`).
+
+### `POST /api/tasks/{task_id}/complete`
+Marks the task as `COMPLETED` and sets `completed_at` to the current ISO timestamp.
+
+### `DELETE /api/tasks/{task_id}`
+Removes the specified task from SQLite.
+
 ---
 
-## 5. Memory & Context
+## 5. Long-Term Memory
 
 ### `GET /api/memory`
-Retrieves user profile, active study goals, weak topics, and recent dialogue turns.
+Retrieves aggregated profile context, active goals, and recent turns.
+
+### `GET /api/memory/search?q={query}&category={optional}`
+Full-text search across all persistent SQLite memory records.
+
+### `POST /api/memory`
+Creates or updates a memory record in a specified category (`USER_PROFILE`, `GOALS`, `PREFERENCES`, `TOPIC_MASTERY`, `MISTAKES`, etc.).
+
+### `DELETE /api/memory/{category}/{key}`
+Deletes the specific memory item.

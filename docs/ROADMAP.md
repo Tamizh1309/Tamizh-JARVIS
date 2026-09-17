@@ -1,41 +1,29 @@
-# Tamizh JARVIS Roadmap
+﻿# Tamizh JARVIS Roadmap
 
-## Phase 0: Audit & Foundation Setup (Completed)
-- Environment audit (Python 3.14/3.10, Node.js v23, SQLite).
-- Repository initialization, Git hooks, .env.example, documentation structure.
+## Status Matrix
 
-## Phase 1: Foundation (Current)
-- Backend FastAPI app with logging, configuration, and `/api/health`.
-- Frontend React Dashboard with dark futuristic aesthetic, sidebar, chat, and status telemetry.
-- Automated health and integration tests.
+### Implemented & Verified (Phase 1 - Phase 4)
+- ✅ **Phase 1: Foundation & Telemetry**: FastAPI backend, React futuristic dark UI, `/api/health`, environment validation.
+- ✅ **Phase 2: Real AI Provider Chain**: Predictable provider selection (`AUTO`, `GEMINI`, `LOCAL`, `FALLBACK`), Google Gemini 1.5/2.5 client with rate-limit and error shielding, Ollama local client, offline fallback engine.
+- ✅ **Phase 3: Agentic Core & Intent Routing**: 7-stage lifecycle loop, 21 deterministic and semantic intents, multi-step planner, structured JSON contract.
+- ✅ **Phase 4: Real Persistence, Tools & Hardening**:
+  - Full Task Engine schema with SQLite persistence (`id`, `title`, `description`, `status`, `priority`, `created_at`, `due_at`, `completed_at`, `category`, `source`).
+  - 14-domain long-term memory store surviving backend restarts (`USER_PROFILE`, `GOALS`, `PREFERENCES`, `STUDY_HISTORY`, `TOPIC_MASTERY`, `MISTAKES`, `TASKS`, etc.).
+  - Deterministic Next Best Action scoring engine.
+  - Dynamic Daily Briefing calculated from SQLite.
+  - 4-tier security layer (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) with confirmation gates and injection guards.
+  - Frontend API configuration with `VITE_API_BASE_URL`.
+  - Comprehensive test suite (50 tests passing with 0 failures).
 
-## Phase 2: AI Provider Layer
-- `AIProvider` base class.
-- `GeminiProvider` implementation with key rotation/failover.
-- `LocalProvider` for Ollama/OpenAI API compatibility.
-- Graceful offline fallback provider.
+---
 
-## Phase 3: JARVIS Core & Intent Router
-- Agentic execution pipeline: Understand -> Think -> Plan -> Decide -> Select Tool -> Execute -> Verify -> Remember -> Respond.
-- Intent classification engine (General Chat, Study, Task, Career, Coding, System).
+### In Development
+- ⚠️ **Continuous Audio Streaming**: Enhancing Web Speech API with bidirectional audio streaming and live waveform visualizations.
+- ⚠️ **Advanced Spaced Repetition**: Automatic Leitner box interval calculation from historical mistake logs.
 
-## Phase 4: Storage & Memory Layer
-- SQLite database via SQLAlchemy & aiosqlite.
-- User profile, goals, conversation history, and study metrics.
-- Targeted memory queries (avoiding context-window saturation).
+---
 
-## Phase 5: Tool & Security System
-- Base tool contract with schema validation.
-- Four-tier risk classifier (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
-- Security approval gate preventing unauthorized execution.
-
-## Phase 6: Study Intelligence & Next Best Action Engine
-- GATE examination scheduler and syllabus tracker.
-- DSA practice tracker and mistake log.
-- Deterministic Next Best Action algorithm.
-
-## Phase 7: Voice Layer
-- Speech-to-Text (STT) and Text-to-Speech (TTS) integration with visual waveforms.
-
-## Phase 8: Controlled Computer Assistance
-- Permission-gated application launching, web browser automation, and screen reading.
+### Planned (Future Phases)
+- ❌ **Phase 5: Local Vector Search**: Hybrid BM25 and vector embedding indexing for million-token technical textbooks.
+- ❌ **Phase 6: Multi-Device Sync**: Optional end-to-end encrypted cloud sync for mobile companion app.
+- ❌ **Phase 7: Controlled Desktop Automation**: Safe, permission-gated OS accessibility automation for local developer tooling.
