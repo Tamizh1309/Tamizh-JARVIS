@@ -1,4 +1,4 @@
-import json
+﻿import json
 import logging
 import re
 from typing import Optional
@@ -26,23 +26,27 @@ class FallbackProvider(AIProvider):
         text = prompt.strip().lower()
 
         if json_mode:
-            # Deterministic intent extraction
+            # Deterministic intent extraction for fallback
             intent = "GENERAL_CHAT"
-            confidence = 0.85
+            confidence = 0.88
 
             if any(w in text for w in ["next best", "what should i do", "what to do", "what should i study", "recommend"]):
                 intent = "NEXT_BEST_ACTION"
-            elif any(w in text for w in ["study", "gate", "syllabus", "subject", "revise", "revision"]):
+            elif any(w in text for w in ["plan my gate revision", "gate revision", "plan revision"]):
+                intent = "GATE_REVISION"
+            elif any(w in text for w in ["study plan", "schedule my study", "study schedule"]):
                 intent = "STUDY_PLAN"
             elif any(w in text for w in ["create task", "add task", "new task", "remind me to"]):
                 intent = "TASK_CREATE"
+            elif any(w in text for w in ["complete", "finish", "mark as done"]):
+                intent = "TASK_COMPLETE"
             elif any(w in text for w in ["tasks", "list tasks", "my tasks", "pending tasks", "todo"]):
                 intent = "TASK_LIST"
             elif any(w in text for w in ["briefing", "summary of today", "daily review", "status"]):
                 intent = "DAILY_BRIEFING"
-            elif any(w in text for w in ["dsa", "leetcode", "array", "tree", "graph", "algorithm"]):
+            elif any(w in text for w in ["dsa", "leetcode", "problem"]):
                 intent = "DSA_PRACTICE"
-            elif any(w in text for w in ["code", "debug", "python", "javascript", "react", "bug"]):
+            elif any(w in text for w in ["binary search", "algorithm", "code", "debug", "python"]):
                 intent = "CODING_HELP"
 
             return json.dumps({
@@ -52,22 +56,26 @@ class FallbackProvider(AIProvider):
             })
 
         # Plain text generation fallback
-        if "next best" in text or "what should i study" in text or "what to do" in text:
-            return "Based on your study profile and priority algorithms, your Next Best Action is: Revise DBMS Transactions for 45 minutes."
+        if "binary search" in text:
+            return (
+                "Binary Search is a divide-and-conquer search algorithm with O(log N) time complexity. "
+                "It works on sorted arrays by repeatedly comparing the target to the middle element "
+                "and cutting the search space in half."
+            )
         elif "hello" in text or "hi" in text or "hey" in text:
-            return "Greetings. Tamizh JARVIS is online. What would you like to plan, study, or execute?"
-        elif "task" in text:
-            return "Task engine is ready. You can ask me to create, list, or update tasks."
+            return "Greetings. Tamizh JARVIS is online and ready. What would you like to plan, study, or execute?"
+        elif "next best" in text or "what should i study" in text:
+            return "Based on your study profile, your Next Best Action is: Revise DBMS Transactions (45 mins)."
+        elif "goal" in text:
+            return "Your primary objective is Software Engineering & GATE CS mastery."
 
         return f"Tamizh JARVIS processed your request: '{prompt}'. System is ready to assist your productivity and study goals."
 
     def _extract_entities(self, text: str) -> dict:
         entities = {}
-        # Extract duration
         duration_match = re.search(r"(\d+)\s*(mins?|minutes?|hours?|hrs?)", text, re.IGNORECASE)
         if duration_match:
             entities["duration"] = duration_match.group(0)
-        # Extract potential topic
         for topic in ["dbms", "os", "operating systems", "dsa", "algorithms", "computer networks", "toc", "compiler design"]:
             if topic in text.lower():
                 entities["topic"] = topic.upper()

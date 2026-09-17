@@ -1,8 +1,8 @@
-from typing import Dict, Any
+﻿from typing import Dict, Any
 
 
 class ResponseManager:
-    """Formats clear, polite, and actionable user responses."""
+    """Formats clear, polite, and actionable user responses with clean UTF-8 text."""
 
     @staticmethod
     def format_response(
@@ -25,6 +25,12 @@ class ResponseManager:
                     f"Daily target is {tool_result.get('target_daily_study_hours')} hours."
                 )
 
+            if action == "goal_updated":
+                return tool_result.get("message", "Career goal updated successfully.")
+
+            if action in ["placement", "interview", "resume"]:
+                return tool_result.get("recommendation", f"Guidance for {action} prepared.")
+
             if action == "weak_topics":
                 topics = tool_result.get("weak_topics", [])
                 if not topics:
@@ -33,6 +39,20 @@ class ResponseManager:
 
             if action == "gate_revision_plan":
                 return tool_result.get("recommendation", "GATE revision plan prepared.")
+
+            if action == "gate_preparation":
+                return tool_result.get("message", "GATE 2026 preparation roadmap ready.")
+
+            if action == "dsa_practice":
+                probs = tool_result.get("recommended_problems", [])
+                lines = [f"• {p['title']} [{p['difficulty']}] - Pattern: {p['pattern']}" for p in probs]
+                return f"DSA Practice Plan:\n" + "\n".join(lines)
+
+            if action == "debug_code":
+                return tool_result.get("message", "Debugging guidance ready.")
+
+            if action == "code_review":
+                return tool_result.get("message", "Code review criteria applied.")
 
             if action == "explain_algorithm":
                 algo = tool_result.get("algorithm", "Algorithm")
@@ -51,6 +71,12 @@ class ResponseManager:
                 if tool_result.get("success"):
                     return f"Successfully marked task '{tool_result.get('title')}' as COMPLETED."
                 return tool_result.get("message", "Task update could not be completed.")
+
+            if action == "task_deleted":
+                return tool_result.get("message", "Task deleted successfully.")
+
+            if action == "reminder_created":
+                return tool_result.get("message", "Reminder scheduled.")
 
             if action == "task_list":
                 tasks = tool_result.get("tasks", [])

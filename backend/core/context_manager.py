@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+﻿from typing import Dict, Any, Optional
 from memory.memory_manager import MemoryManager
 
 
@@ -11,6 +11,7 @@ class ContextManager:
     async def build_context(self, user_input: str, request_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         summary = await self.memory.get_active_context_summary()
         recent_history = self.memory.get_conversation_context(count=4)
+        study_hist = await self.memory.long_term.get_study_history(limit=5)
 
         merged_context = {
             "user_name": summary.get("user_name"),
@@ -19,6 +20,7 @@ class ContextManager:
             "today_study_minutes": summary.get("today_study_minutes"),
             "pending_tasks": summary.get("pending_tasks", []),
             "weak_topics": summary.get("weak_topics", []),
+            "study_history": study_hist,
             "recent_turns": recent_history,
         }
 

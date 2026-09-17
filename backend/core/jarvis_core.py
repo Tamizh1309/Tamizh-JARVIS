@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from typing import Dict, Any, Optional
 
 from ai.provider import AIProvider, get_ai_provider
@@ -22,7 +22,7 @@ logger = logging.getLogger("tamizh_jarvis.core")
 
 
 class JarvisCore:
-    """Master agentic orchestrator for Tamizh JARVIS."""
+    """Master agentic orchestrator for Tamizh JARVIS with 5-stage safe lifecycle execution."""
 
     def __init__(
         self,
@@ -59,14 +59,13 @@ class JarvisCore:
         await self.initialize()
         user_message = message.strip()
 
-        # Step 1: Understand & Build Context
+        # Stage 1: Thinking (Understand & Context Formulation)
         active_context = await self.context_manager.build_context(user_message, context)
 
-        # Step 2: Intent Routing
+        # Stage 2: Planning (Intent Routing & Action Formulation)
         intent, confidence, entities = await self.router.route(user_message, active_context)
         logger.info("Routed intent: %s (confidence: %.2f)", intent, confidence)
 
-        # Step 3: Planning & Tool Selection
         plan = self.planner.create_plan(intent, entities, active_context)
 
         tool_result = None
@@ -74,16 +73,22 @@ class JarvisCore:
         action_name = plan.action
         memory_updated = False
 
-        # Step 4 & 5: Security Check & Tool Execution (if tool requested)
-        if plan.tool_name and plan.tool_name in self.tools:
+        # Stage 3: Executing (Next Best Action or Security-Gated Tool Execution)
+        if intent == "NEXT_BEST_ACTION":
+            tool_result = self.decision_engine.compute_next_best_action(active_context)
+            action_name = tool_result.get("action", "NEXT_BEST_ACTION")
+            tool_used = "decision_engine"
+
+        elif plan.tool_name and plan.tool_name in self.tools:
             tool = self.tools[plan.tool_name]
 
-            # Permission Gate
+            # Stage 4: Verifying (Permission Gate & Security Authorization)
+            is_confirmed = bool(context.get("confirmed", False)) if context else False
             authorized, reason, risk_level = self.security.evaluate(
                 tool_name=plan.tool_name,
                 action=plan.action,
                 params=plan.params,
-                user_confirmed=context.get("confirmed", False) if context else False,
+                user_confirmed=is_confirmed,
             )
 
             if not authorized:
@@ -92,12 +97,12 @@ class JarvisCore:
                     "intent": intent,
                     "action": "PERMISSION_DENIED",
                     "response": f"Security restriction: {reason}",
-                    "data": {"risk_level": risk_level.value},
+                    "data": {"risk_level": risk_level.value, "reason": reason},
                     "toolUsed": tool_used,
                     "memoryUpdated": False,
                 }
 
-            # Execute tool safely
+            # Safe Execution
             try:
                 tool_result = await tool.execute(plan.params, active_context)
                 action_name = tool_result.get("action", plan.action)
@@ -113,22 +118,16 @@ class JarvisCore:
                     "memoryUpdated": False,
                 }
 
-        # Step 6: Next Best Action Engine override if requested
-        if intent == "NEXT_BEST_ACTION" and not tool_result:
-            tool_result = self.decision_engine.compute_next_best_action(active_context)
-            action_name = tool_result.get("action", "NEXT_BEST_ACTION")
-
-        # Step 7: Language Generation if no structured tool was invoked
+        # Stage 5: Responding (Language Generation & Synthesis)
         raw_ai_text = None
         if not tool_result:
             system_prompt = (
                 "You are Tamizh JARVIS, a personal agentic AI assistant. "
                 "Tagline: Think. Plan. Execute. Learn. "
-                "Be concise, clear, and proactive."
+                "Be concise, clear, helpful, and proactive."
             )
             raw_ai_text = await self.ai.generate(prompt=user_message, system_prompt=system_prompt)
 
-        # Step 8: Response Formatting
         response_text = self.response_manager.format_response(
             intent=intent,
             tool_result=tool_result,
@@ -136,7 +135,7 @@ class JarvisCore:
             context=active_context,
         )
 
-        # Step 9: Memory Update & Audit Recording
+        # Memory Update (Context preservation without permanently storing raw unclassified noise)
         self.memory.record_interaction(
             sender="user",
             text=user_message,
