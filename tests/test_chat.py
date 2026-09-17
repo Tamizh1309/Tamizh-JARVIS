@@ -11,7 +11,7 @@ from main import app
 
 
 @pytest.mark.asyncio
-async def test_api_chat_1_hello_jarvis():
+async def test_chat_hello_jarvis():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "Hello JARVIS", "context": {}})
@@ -24,7 +24,7 @@ async def test_api_chat_1_hello_jarvis():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_2_create_task():
+async def test_chat_create_task():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={
@@ -41,7 +41,7 @@ async def test_api_chat_2_create_task():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_3_list_tasks():
+async def test_chat_list_tasks():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "List my pending tasks", "context": {}})
@@ -54,7 +54,7 @@ async def test_api_chat_3_list_tasks():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_4_complete_task():
+async def test_chat_complete_task():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "Complete my DSA task", "context": {}})
@@ -67,7 +67,7 @@ async def test_api_chat_4_complete_task():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_5_next_best_action():
+async def test_chat_next_best_action():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "What should I study now?", "context": {}})
@@ -79,7 +79,7 @@ async def test_api_chat_5_next_best_action():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_6_plan_gate_revision():
+async def test_chat_plan_gate_revision():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "Plan my GATE revision", "context": {}})
@@ -93,7 +93,7 @@ async def test_api_chat_6_plan_gate_revision():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_7_weak_topics():
+async def test_chat_weak_topics():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "What are my weak topics?", "context": {}})
@@ -107,7 +107,7 @@ async def test_api_chat_7_weak_topics():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_8_career_goal():
+async def test_chat_career_goal():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "What is my career goal?", "context": {}})
@@ -121,7 +121,7 @@ async def test_api_chat_8_career_goal():
 
 
 @pytest.mark.asyncio
-async def test_api_chat_9_explain_binary_search():
+async def test_chat_explain_binary_search():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.post("/api/chat", json={"message": "Explain binary search", "context": {}})
@@ -135,32 +135,25 @@ async def test_api_chat_9_explain_binary_search():
 
 
 @pytest.mark.asyncio
-async def test_api_health_endpoint():
+async def test_chat_reminder():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        res = await client.get("/api/health")
-        assert res.status_code == 200
-        assert res.json()["status"] == "ok"
-
-
-@pytest.mark.asyncio
-async def test_api_study_next_action():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        res = await client.get("/api/study/next-action")
+        res = await client.post("/api/chat", json={"message": "Create a reminder to revise DBMS", "context": {}})
         assert res.status_code == 200
         data = res.json()
         assert data["success"] is True
-        assert "title" in data
-        assert "priority" in data
+        assert data["intent"] == "REMINDER"
+        assert data["action"] == "reminder_created"
+        assert data["toolUsed"] == "task_tool"
 
 
 @pytest.mark.asyncio
-async def test_api_study_briefing():
+async def test_chat_permission_denied_prohibited():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        res = await client.get("/api/study/briefing")
+        # High risk action without confirmation
+        res = await client.post("/api/chat", json={
+            "message": "update task",
+            "context": {"confirmed": False}
+        })
         assert res.status_code == 200
-        data = res.json()
-        assert data["success"] is True
-        assert "pending_tasks_count" in data

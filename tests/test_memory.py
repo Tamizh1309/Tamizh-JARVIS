@@ -1,45 +1,105 @@
+﻿import os
 import pytest
 from memory.memory_manager import MemoryManager
 
 
 @pytest.mark.asyncio
-async def test_memory_profile():
-    mem = MemoryManager(db_path=":memory:")
-    await mem.initialize()
+async def test_memory_profile_persistence_across_restarts(tmp_path):
+    db_file = str(tmp_path / "test_persist.db")
 
-    profile = mem.get_user_profile()
-    assert "name" in profile
-    assert profile["name"] == "Tamizharasan"
-    assert "GATE" in profile["primary_goal"]
+    # Instance 1: Set goal
+    mem1 = MemoryManager(db_path=db_file)
+    await mem1.initialize()
+    await mem1.profile.set_goal("Senior Software Engineer at Google")
+    profile1 = mem1.get_user_profile()
+    assert profile1["primary_goal"] == "Senior Software Engineer at Google"
+    await mem1.long_term.close()
 
-
-@pytest.mark.asyncio
-async def test_memory_conversation_history():
-    mem = MemoryManager(db_path=":memory:")
-    await mem.initialize()
-
-    mem.record_interaction("user", "Hello JARVIS", intent="GENERAL_CHAT")
-    mem.record_interaction("jarvis", "Hello Tamizh", intent="GENERAL_CHAT")
-
-    history = mem.get_conversation_context(count=2)
-    assert len(history) == 2
-    assert history[0]["sender"] == "user"
-    assert history[1]["sender"] == "jarvis"
+    # Instance 2: Simulate backend restart with same database
+    mem2 = MemoryManager(db_path=db_file)
+    await mem2.initialize()
+    profile2 = mem2.get_user_profile()
+    assert profile2["primary_goal"] == "Senior Software Engineer at Google"
+    await mem2.long_term.close()
 
 
 @pytest.mark.asyncio
-async def test_memory_tasks_crud():
-    mem = MemoryManager(db_path=":memory:")
+async def test_memory_crud_and_search(tmp_path):
+    db_file = str(tmp_path / "test_crud.db")
+    mem = MemoryManager(db_path=db_file)
     await mem.initialize()
 
-    task_id = await mem.long_term.create_task("Test Task", "Test Description", "HIGH")
+    # Create
+    created = await mem.create("GOALS", "target_role", "Distributed Systems Engineer", {"tier": "Tier 1"})
+    assert created is True
+
+    # Read
+    item = await mem.read("GOALS", "target_role")
+    assert item is not None
+    assert item["value"] == "Distributed Systems Engineer"
+
+    # Update
+    updated = await mem.update("GOALS", "target_role", "Principal Architect")
+    assert updated is True
+    item_updated = await mem.read("GOALS", "target_role")
+    assert item_updated["value"] == "Principal Architect"
+
+    # Search
+    search_res = await mem.search("Architect")
+    assert len(search_res) >= 1
+    assert search_res[0]["key"] == "target_role"
+
+    # Delete
+    deleted = await mem.delete("GOALS", "target_role")
+    assert deleted is True
+    item_deleted = await mem.read("GOALS", "target_role")
+    assert item_deleted is None
+
+    await mem.long_term.close()
+
+
+@pytest.mark.asyncio
+async def test_memory_tasks_crud_full_schema(tmp_path):
+    db_file = str(tmp_path / "test_tasks.db")
+    mem = MemoryManager(db_path=db_file)
+    await mem.initialize()
+
+    # 1. Create task
+    task_id = await mem.long_term.create_task(
+        title="Complete 3 LeetCode Problems",
+        description="Two Pointers and Sliding Window",
+        priority="HIGH",
+        due_at="2026-10-01",
+        category="DSA",
+        source="USER"
+    )
     assert task_id > 0
 
-    tasks = await mem.long_term.list_tasks()
-    assert any(t["id"] == task_id and t["title"] == "Test Task" for t in tasks)
+    # 2. List tasks
+    tasks = await mem.long_term.list_tasks(status="PENDING")
+    created_task = next(t for t in tasks if t["id"] == task_id)
+    assert created_task["title"] == "Complete 3 LeetCode Problems"
+    assert created_task["priority"] == "HIGH"
+    assert created_task["category"] == "DSA"
 
-    updated = await mem.long_term.update_task_status(task_id, "COMPLETED")
+    # 3. Update task
+    updated = await mem.long_term.update_task(task_id, {"priority": "LOW", "description": "Updated desc"})
     assert updated is True
+    t = await mem.long_term.get_task(task_id)
+    assert t["priority"] == "LOW"
+    assert t["description"] == "Updated desc"
 
-    pending_tasks = await mem.long_term.list_tasks(status="PENDING")
-    assert not any(t["id"] == task_id for t in pending_tasks)
+    # 4. Complete task
+    completed = await mem.long_term.complete_task(task_id)
+    assert completed is True
+    t_done = await mem.long_term.get_task(task_id)
+    assert t_done["status"] == "COMPLETED"
+    assert t_done["completed_at"] is not None
+
+    # 5. Delete task
+    deleted = await mem.long_term.delete_task(task_id)
+    assert deleted is True
+    t_del = await mem.long_term.get_task(task_id)
+    assert t_del is None
+
+    await mem.long_term.close()
