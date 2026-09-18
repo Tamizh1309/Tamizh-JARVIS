@@ -13,17 +13,19 @@ class DecisionEngine:
     - unfinished task backlog
     - recent performance / mistakes
     - duration fit vs available time
+    - target completion state
     """
 
     @staticmethod
     def compute_next_best_action(context: Dict[str, Any]) -> Dict[str, Any]:
         now = datetime.now()
-        current_hour = now.hour
+        current_hour = int(context.get("current_hour", now.hour))
         available_time = int(context.get("available_time", 45))
         pending_tasks = context.get("pending_tasks", [])
         weak_topics = context.get("weak_topics", [])
         today_mins = int(context.get("today_study_minutes", 0))
         target_hours = float(context.get("target_hours", 3.5))
+        target_mins = int(target_hours * 60)
         goal = (context.get("goal") or "").lower()
         study_history = context.get("study_history", [])
         current_subjects = context.get("current_subjects", [])
@@ -81,8 +83,29 @@ class DecisionEngine:
                 "score_breakdown": score_breakdown,
             })
 
-        # Candidate 3: Evening Review (after 8 PM / 20:00)
-        if current_hour >= 20:
+        # Candidate 3: Target Completed Consolidation / Light Review
+        if target_mins > 0 and today_mins >= target_mins and not high_priority_tasks:
+            score_breakdown = {
+                "deadline_urgency": 0.20,
+                "goal_relevance": 0.90,
+                "weakness_priority": 0.30,
+                "revision_due": 0.50,
+                "unfinished_task": 0.20,
+                "duration_fit": 1.0,
+            }
+            candidates.append({
+                "score": 92.0,
+                "action": "TARGET_COMPLETED",
+                "title": "Daily Target Completed — Light Revision & Rest",
+                "duration_minutes": min(available_time, 20),
+                "priority": "LOW",
+                "reason": f"Daily target of {target_hours}h reached ({today_mins}m logged). Consolidate notes or rest.",
+                "description": "Daily target achieved. Excellent consistency.",
+                "score_breakdown": score_breakdown,
+            })
+
+        # Candidate 4: Evening Review (after 8 PM / 20:00 when study has been logged today)
+        if current_hour >= 20 and today_mins > 0:
             score_breakdown = {
                 "deadline_urgency": 0.80,
                 "goal_relevance": 0.80,
@@ -102,7 +125,7 @@ class DecisionEngine:
                 "score_breakdown": score_breakdown,
             })
 
-        # Candidate 4: Goal-Aligned DSA / Coding Practice
+        # Candidate 5: Goal-Aligned DSA / Coding Practice
         if "software" in goal or "dsa" in goal or "code" in goal:
             score_breakdown = {
                 "deadline_urgency": 0.45,
@@ -123,7 +146,7 @@ class DecisionEngine:
                 "score_breakdown": score_breakdown,
             })
 
-        # Candidate 5: Standard Pending Task
+        # Candidate 6: Standard Pending Task
         if pending_tasks:
             next_task = pending_tasks[0]
             score_breakdown = {
@@ -145,7 +168,7 @@ class DecisionEngine:
                 "score_breakdown": score_breakdown,
             })
 
-        # Candidate 6: Core Syllabus Study Block
+        # Candidate 7: Core Syllabus Study Block (Default Fallback)
         default_subject = current_subjects[0] if current_subjects else "Computer Science"
         score_breakdown = {
             "deadline_urgency": 0.40,
