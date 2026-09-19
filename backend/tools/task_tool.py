@@ -68,8 +68,19 @@ class TaskTool(BaseTool):
 
             if not task_id and keyword:
                 pending = await self.memory.long_term.list_tasks(status="PENDING")
-                matched = next((t for t in pending if keyword.lower() in t.get("title", "").lower()), None)
-                if not matched and (keyword.lower() in ["task", "it", "my task"] or len(pending) == 1):
+                # Normalize keyword by stripping conversational articles
+                clean_kw = keyword.lower()
+                for stopword in ["the ", "my ", "this ", "that ", "task "]:
+                    clean_kw = clean_kw.replace(stopword, " ")
+                clean_kw = clean_kw.strip()
+
+                matched = next((t for t in pending if clean_kw and clean_kw in t.get("title", "").lower()), None)
+                if not matched:
+                    matched = next((t for t in pending if keyword.lower() in t.get("title", "").lower()), None)
+                if not matched and clean_kw:
+                    words = [w for w in clean_kw.split() if len(w) > 2]
+                    matched = next((t for t in pending if any(w in t.get("title", "").lower() for w in words)), None)
+                if not matched and (keyword.lower() in ["task", "it", "my task", "the task"] or len(pending) == 1):
                     matched = pending[0] if pending else None
 
                 if matched:

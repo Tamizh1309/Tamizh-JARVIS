@@ -69,7 +69,7 @@ class ProfileTool(BaseTool):
             )
 
         # 3. PLACEMENT ROADMAP (Personalized to user's primary goal and weak topics)
-        if action in ["placement", "campus_placement"]:
+        if action in ["placement", "campus_placement", "placement_prep"]:
             goal = profile.primary_goal
             weak_topics = profile.weak_topics
 
@@ -136,7 +136,7 @@ class ProfileTool(BaseTool):
             )
 
         # 5. RESUME REVIEW (Real analysis of user-supplied resume content)
-        if action in ["resume", "cv", "resume_review"]:
+        if action in ["resume", "cv", "resume_review", "analyze_resume"]:
             resume_text = params.get("resume_text")
 
             if not resume_text or len(resume_text.strip()) < 10:
