@@ -1,39 +1,58 @@
-# Tamizh JARVIS REST API Specification
+# Tamizh JARVIS REST API Specification (Phase 9 Release Candidate)
 
-## Endpoints
+All endpoints return structured JSON responses.
 
-### 1. Chat
-- **POST** `/api/chat`
-  - Body: `{"message": str, "context": Optional[dict]}`
-  - Status Codes: `200 OK`, `400 Bad Request`, `422 Unprocessable Entity`, `500 Server Error`
-  - Response Schema:
-    ```json
-    {
-      "success": true,
-      "intent": "TASK_CREATE",
-      "action": "task_created",
-      "response": "Created task...",
-      "data": {},
-      "toolUsed": "task_tool",
-      "memoryUpdated": true
-    }
-    ```
+## Endpoint Status & Matrix
 
-### 2. Health
-- **GET** `/api/health`
-  - Status: `200 OK`
-  - Returns service status, version, environment, and active AI provider.
+| Endpoint | Method | Status | Description |
+|---|---|---|---|
+| `/api/chat` | `POST` | ✅ IMPLEMENTED | Core natural language agent interface. Dispatches to IntentRouter, Planner, SecurityGate, Tool, and Memory. |
+| `/api/health` | `GET` | ✅ IMPLEMENTED | Service health, version, environment, and active AI provider inspection. |
+| `/api/study/next-action` | `GET` | ✅ IMPLEMENTED | Computes data-driven Next Best Action based on Scenarios A–E with mathematical `score_breakdown`. |
+| `/api/study/briefing` | `GET` | ✅ IMPLEMENTED | Real-time daily study briefing, study hours completed, and target percentage. |
+| `/api/study/history` | `GET` | ✅ IMPLEMENTED | Historical study sessions in reverse chronological order with pagination (`limit`). |
+| `/api/study/weak-topics` | `GET` | ✅ IMPLEMENTED | Weak topics requiring spaced repetition reinforcement. |
+| `/api/study/session` | `POST` | ✅ IMPLEMENTED | Logs completed study session directly into SQLite with validation. |
+| `/api/tasks` | `GET` | ✅ IMPLEMENTED | Lists tasks filtered by `status` (PENDING, COMPLETED) or `category`. |
+| `/api/tasks` | `POST` | ✅ IMPLEMENTED | Creates a new task with title, priority, category, and due date. |
+| `/api/tasks/{id}` | `PATCH` / `PUT` | ✅ IMPLEMENTED | Updates task details, priority, or category. |
+| `/api/tasks/{id}/complete` | `POST` | ✅ IMPLEMENTED | Marks task status as COMPLETED and timestamps completion. |
+| `/api/tasks/{id}` | `DELETE` | ✅ IMPLEMENTED | Removes task; enforces confirmation protocol for HIGH risk deletion. |
+| `/api/memory/profile` | `GET` | ✅ IMPLEMENTED | Retrieves user profile, primary goal, target hours, and weak topics. |
+| `/api/memory/domain` | `GET` | ✅ IMPLEMENTED | Lists memory records scoped by category (e.g. GOAL, PREFERENCE, STUDY). |
+| `/api/voice/stream` | `POST` | 🟡 PLANNED | Full-duplex WebRTC audio streaming for hands-free study mode. |
+| `/api/embeddings/search` | `POST` | 🟡 PLANNED | Semantic vector search over personal study notes and syllabus. |
 
-### 3. Study Subsystem
-- **GET** `/api/study/next-action`: Computes Next Best Action with `score_breakdown`.
-- **GET** `/api/study/briefing`: Returns dynamic daily briefing metrics from SQLite.
-- **GET** `/api/study/history?limit=10`: Returns study session log.
-- **GET** `/api/study/weak-topics`: Returns tracked weak topics.
-- **POST** `/api/study/session`: Logs a study session (`subject`, `topic`, `duration`, `notes`, `score`, `timestamp`).
+## Request & Response Schemas
 
-### 4. Tasks Subsystem
-- **GET** `/api/tasks`: List tasks filtered by `status` or `category`.
-- **POST** `/api/tasks`: Create a new task.
-- **PATCH / PUT** `/api/tasks/{task_id}`: Update task properties.
-- **POST** `/api/tasks/{task_id}/complete`: Mark task as completed.
-- **DELETE** `/api/tasks/{task_id}`: Delete task record.
+### POST /api/chat
+**Request:**
+```json
+{
+  "message": "Create a task to solve 3 LeetCode problems today",
+  "context": {}
+}
+```
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "intent": "TASK_CREATE",
+  "action": "task_created",
+  "response": "Created task: Solve 3 LeetCode problems today (Priority: HIGH)",
+  "data": {
+    "task_id": 12,
+    "title": "Solve 3 LeetCode problems today",
+    "status": "PENDING",
+    "priority": "HIGH"
+  },
+  "toolUsed": "task_tool",
+  "memoryUpdated": true
+}
+```
+
+### Error Responses
+- `400 Bad Request`: Invalid parameters (e.g. empty message, negative query limit).
+- `404 Not Found`: Entity not found (e.g. non-existent task ID).
+- `422 Unprocessable Entity`: Schema validation errors (e.g. missing required fields).
+- `500 Internal Server Error`: Unhandled server exception (stack traces sanitized in production).

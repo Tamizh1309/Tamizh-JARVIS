@@ -73,6 +73,16 @@ class LongTermMemory:
             )
         """)
 
+        # Migration: Ensure all study_sessions columns exist
+        cursor_sess = await db.execute("PRAGMA table_info(study_sessions)")
+        existing_sess_cols = [row["name"] for row in await cursor_sess.fetchall()]
+        if "notes" not in existing_sess_cols:
+            await db.execute("ALTER TABLE study_sessions ADD COLUMN notes TEXT DEFAULT ''")
+        if "session_type" not in existing_sess_cols:
+            await db.execute("ALTER TABLE study_sessions ADD COLUMN session_type TEXT DEFAULT 'STUDY'")
+        if "score" not in existing_sess_cols:
+            await db.execute("ALTER TABLE study_sessions ADD COLUMN score REAL DEFAULT 0.0")
+
         # 3. Facts Table (legacy/general)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS facts (

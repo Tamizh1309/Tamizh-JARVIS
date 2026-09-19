@@ -1,4 +1,9 @@
-# Tamizh JARVIS Developer Guide
+# Tamizh JARVIS Development Guide (Phase 9 Release Candidate)
+
+## Prerequisites
+- Python 3.11 or higher
+- Node.js 20 or higher
+- npm 10 or higher
 
 ## Local Setup
 
@@ -11,7 +16,7 @@ python -m venv .venv
 # source .venv/bin/activate # Linux/Mac
 
 pip install -r requirements.txt
-pytest
+pytest -q
 uvicorn main:app --reload --port 8000
 ```
 
@@ -19,16 +24,29 @@ uvicorn main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
+npm run build
 npm run dev
 ```
 
-### 3. Running Tests
+### 3. Running Automated Tests
 ```bash
-# Run backend tests
-pytest -v tests/
+# Full test suite (98 tests across unit, integration, e2e, security)
+pytest -q
+
+# Targeted test suites
+pytest -q tests/test_end_to_end_agent.py
+pytest -q tests/test_registry_consistency.py
+pytest -q tests/test_error_paths.py
+pytest -q tests/test_chat_api.py
+pytest -q tests/test_memory.py
+pytest -q tests/test_study.py
+pytest -q tests/test_tasks.py
+pytest -q tests/test_security.py
+pytest -q tests/test_phase9_release_validation.py
 ```
 
-### 4. Coding Standards
-- Python code strictly uses type annotations and Pydantic schemas.
-- Vanilla CSS in `frontend/src/index.css` maintaining the dark-first futuristic palette.
-- Keep business logic deterministic where possible; use the AI Provider only for language understanding, decomposition, and summarization.
+## Production Build & Verification Checklist
+- ✅ Run `pytest -q` (must show 0 failures).
+- ✅ Run `npm run build` in `frontend/` (must transform modules and generate `dist/` cleanly).
+- ✅ Configure `ALLOWED_ORIGINS` in production backend `.env`.
+- ✅ Configure `VITE_API_BASE_URL` in frontend build or runtime settings.
