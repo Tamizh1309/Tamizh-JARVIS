@@ -104,7 +104,7 @@ class ProfileTool(BaseTool):
             )
 
         # 4. INTERVIEW PREPARATION (Personalized to user's profile)
-        if action in ["interview", "mock_interview"]:
+        if action in ["interview", "mock_interview", "interview_prep"]:
             goal = profile.primary_goal
             weak = profile.weak_topics
 
