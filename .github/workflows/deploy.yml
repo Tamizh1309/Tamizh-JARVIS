@@ -12,12 +12,13 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   test-backend:
     name: Backend Test Suite
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,12 +37,13 @@ jobs:
 
       - name: Run Backend Pytest Suite
         run: |
-          pytest -q
+          PYTHONPATH=backend python -m pytest -q tests/
 
   build-and-deploy:
     name: Build Frontend & Deploy
     needs: test-backend
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository

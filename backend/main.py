@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI):
     logger.info("Tamizh JARVIS Core, Storage, and Memory subsystems fully initialized.")
     yield
     logger.info("Shutting down %s...", settings.APP_NAME)
+    try:
+        await core.memory.long_term.close()
+    except Exception:
+        pass
 
 
 settings = get_settings()
