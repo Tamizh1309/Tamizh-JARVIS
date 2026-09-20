@@ -404,6 +404,89 @@ class CodingTool(BaseTool):
             "concept": concept,
             "code_example": code_sample,
         }
+        
+        # ----------------------------------------------------------------------
+        # 6. GENERATE PATCH (Diff Generation & Safety Verification)
+        # ----------------------------------------------------------------------
+        if action in ["generate_patch", "patch_generate", "create_patch"]:
+            orig = params.get("original_code", "") or code or ""
+            modified = params.get("suggested_code", "") or params.get("modified_code", "")
+            file_target = params.get("file_path", "solution.py")
+
+            if not orig.strip() or not modified.strip():
+                return self.format_output(
+                    success=False,
+                    action="generate_patch",
+                    data={"patch": ""},
+                    message="Both 'original_code' and 'suggested_code' are required to generate a patch."
+                )
+
+            import difflib
+            orig_lines = orig.splitlines(keepends=True)
+            mod_lines = modified.splitlines(keepends=True)
+            diff = "".join(difflib.unified_diff(
+                orig_lines, mod_lines,
+                fromfile=f"a/{file_target}",
+                tofile=f"b/{file_target}"
+            ))
+
+            data = {
+                "file_path": file_target,
+                "patch": diff,
+                "lines_added": len([l for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++")]),
+                "lines_removed": len([l for l in diff.splitlines() if l.startswith("-") and not l.startswith("---")]),
+                "requires_approval": True,
+                "status": "PATCH_GENERATED"
+            }
+            return self.format_output(
+                success=True,
+                action="generate_patch",
+                data=data,
+                message=f"Patch generated for {file_target} (+{data['lines_added']} / -{data['lines_removed']} lines). User approval required before applying."
+            )
+
+        # ----------------------------------------------------------------------
+        # 7. APPLY PATCH & VERIFY (In-Memory Safe Transformation)
+        # ----------------------------------------------------------------------
+        if action in ["apply_patch", "patch_apply"]:
+            orig = params.get("original_code", "") or code or ""
+            modified = params.get("suggested_code", "") or params.get("modified_code", "")
+            lang = (params.get("language") or "python").lower()
+
+            if not modified.strip():
+                return self.format_output(
+                    success=False,
+                    action="apply_patch",
+                    data={"applied": False},
+                    message="No modified code provided to apply."
+                )
+
+            # Verification: Syntax check
+            syntax_ok = True
+            syntax_err = None
+            if lang == "python":
+                try:
+                    ast.parse(modified)
+                except SyntaxError as se:
+                    syntax_ok = False
+                    syntax_err = f"SyntaxError on line {se.lineno}: {se.msg}"
+
+            data = {
+                "applied": syntax_ok,
+                "language": lang,
+                "resulting_code": modified if syntax_ok else orig,
+                "syntax_verified": syntax_ok,
+                "verification_error": syntax_err,
+                "status": "VERIFIED" if syntax_ok else "VERIFICATION_FAILED"
+            }
+            msg = "Patch successfully applied and syntax verified." if syntax_ok else f"Patch verification failed: {syntax_err}"
+            return self.format_output(
+                success=syntax_ok,
+                action="apply_patch",
+                data=data,
+                message=msg
+            )
+
         return self.format_output(
             success=True,
             action="explain_algorithm",

@@ -1,3 +1,4 @@
+"""Master agentic orchestrator for Tamizh JARVIS with unified multi-step and 5-stage lifecycle execution."""
 import logging
 from typing import Dict, Any, Optional
 from ai.provider import AIProvider, get_ai_provider
@@ -17,39 +18,62 @@ from core.router import IntentRouter
 from core.planner import Planner
 from core.decision_engine import DecisionEngine
 from core.response_manager import ResponseManager
+from core.orchestrator import UnifiedOrchestrator
 
 logger = logging.getLogger("tamizh_jarvis.core")
 
 
 class JarvisCore:
-    """Master agentic orchestrator for Tamizh JARVIS with 5-stage safe lifecycle execution."""
+    """Master agentic orchestrator for Tamizh JARVIS with safe lifecycle execution."""
 
     def __init__(
         self,
         ai_provider: Optional[AIProvider] = None,
         memory_manager: Optional[MemoryManager] = None,
         permission_manager: Optional[PermissionManager] = None,
+        router: Optional[IntentRouter] = None,
+        planner: Optional[Planner] = None,
+        context_manager: Optional[ContextManager] = None,
+        response_manager: Optional[ResponseManager] = None,
     ):
         self.ai = ai_provider or get_ai_provider()
+        self.ai_provider = self.ai
         self.memory = memory_manager or MemoryManager()
         self.security = permission_manager or PermissionManager()
 
-        self.context_manager = ContextManager(self.memory)
-        self.router = IntentRouter(self.ai)
-        self.planner = Planner()
+        self.context_manager = context_manager or ContextManager(self.memory)
+        self.router = router or IntentRouter(self.ai)
+        self.planner = planner or Planner()
         self.decision_engine = DecisionEngine()
-        self.response_manager = ResponseManager()
+        self.response_manager = response_manager or ResponseManager()
 
-        # Register Available Tools
+        # Pre-register all authorized tools
         self.tools: Dict[str, BaseTool] = {
             "task_tool": TaskTool(self.memory),
             "study_tool": StudyTool(self.memory),
             "schedule_tool": ScheduleTool(self.memory),
             "progress_tool": ProgressTool(self.memory),
-            "profile_tool": ProfileTool(self.memory, self.ai),
-            "coding_tool": CodingTool(self.ai),
+            "profile_tool": ProfileTool(self.memory),
+            "coding_tool": CodingTool(),
             "rag_tool": RAGTool(),
         }
+
+        # Unified Orchestrator
+        self.orchestrator = UnifiedOrchestrator(
+            router=self.router,
+            planner=self.planner,
+            security=self.security,
+            memory=self.memory,
+            tools=self.tools,
+            ai_provider=self.ai,
+            response_manager=self.response_manager
+        )
+
+    def register_tool(self, tool: BaseTool) -> None:
+        """Registers an authorized tool."""
+        self.tools[tool.name] = tool
+        if hasattr(self, "orchestrator") and self.orchestrator:
+            self.orchestrator.tools[tool.name] = tool
 
     def get_tool(self, tool_name: str) -> Optional[BaseTool]:
         """Returns the tool instance if registered in JARVIS."""
@@ -68,12 +92,16 @@ class JarvisCore:
                 return False
         return True
 
+    def verify_tool_registry(self) -> bool:
+        """Alias for validate_tool_registry."""
+        return self.validate_tool_registry()
+
     async def initialize(self):
         """Pre-initialize persistent storage and memory."""
         await self.memory.initialize()
 
     async def handle(self, message: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Main agentic entrypoint handling user message and returning structured response."""
+        """Main agentic entrypoint handling user message through the unified orchestrator."""
         user_message = (message or "").strip()
 
         if not user_message:
@@ -87,155 +115,45 @@ class JarvisCore:
                 "memoryUpdated": False,
             }
 
-        intent = "GENERAL_CHAT"
-        tool_used = "none"
-        action_name = "general_chat"
-
         try:
             await self.initialize()
 
-            # Stage 1: Thinking (Understand & Context Formulation)
+            # Build enriched context with conversational entity tracking
             active_context = await self.context_manager.build_context(user_message, context)
 
-            # Stage 2: Planning (Intent Routing & Action Formulation)
-            intent, confidence, entities = await self.router.route(user_message, active_context)
-            logger.info("Routed intent: %s (confidence: %.2f)", intent, confidence)
+            # Sync tools to orchestrator in case test manipulated self.tools
+            self.orchestrator.tools = self.tools
 
-            plan = self.planner.create_plan(intent, entities, active_context)
+            # Process through Unified Orchestrator
+            result = await self.orchestrator.execute_request(user_message, active_context)
 
-            tool_result = None
-            tool_used = plan.tool_name
-            action_name = plan.action
-            memory_updated = False
-
-            # Stage 3 & 4: Verifying (Security Authorization) & Executing Tool
-            if intent == "NEXT_BEST_ACTION":
-                authorized, reason, risk_level = self.security.evaluate(
-                    tool_name="study_tool",
-                    action="recommend",
-                    params=plan.params,
-                    user_confirmed=True,
-                )
-                if not authorized:
-                    return {
-                        "success": False,
-                        "intent": intent,
-                        "action": "PERMISSION_DENIED",
-                        "response": f"Security restriction: {reason}",
-                        "data": {"risk_level": risk_level.value, "reason": reason},
-                        "toolUsed": "decision_engine",
-                        "memoryUpdated": False,
-                    }
-                tool_result = self.decision_engine.compute_next_best_action(active_context)
-                action_name = tool_result.get("action", "NEXT_BEST_ACTION")
-                tool_used = "decision_engine"
-
-            elif plan.tool_name:
-                if plan.tool_name not in self.tools:
-                    logger.error("Architecture error: Planner requested unregistered tool '%s'", plan.tool_name)
-                    return {
-                        "success": False,
-                        "intent": intent,
-                        "action": "MISSING_TOOL",
-                        "response": f"Requested tool '{plan.tool_name}' is not registered in JarvisCore.",
-                        "data": {"requested_tool": plan.tool_name},
-                        "toolUsed": plan.tool_name,
-                        "memoryUpdated": False,
-                    }
-
-                tool = self.tools[plan.tool_name]
-
-                # Stage 4: Verifying (Permission Gate & Security Authorization)
-                is_confirmed = bool(context.get("confirmed", False)) if context else False
-                authorized, reason, risk_level = self.security.evaluate(
-                    tool_name=plan.tool_name,
-                    action=plan.action,
-                    params=plan.params,
-                    user_confirmed=is_confirmed,
-                )
-
-                if not authorized:
-                    return {
-                        "success": False,
-                        "intent": intent,
-                        "action": "PERMISSION_DENIED",
-                        "response": f"Security restriction: {reason}",
-                        "data": {"risk_level": risk_level.value, "reason": reason},
-                        "toolUsed": tool_used,
-                        "memoryUpdated": False,
-                    }
-
-                # Safe Execution
-                try:
-                    tool_result = await tool.execute(plan.params, active_context)
-                    action_name = tool_result.get("action", plan.action)
-                except Exception as e:
-                    logger.error("Tool execution failed: %s", str(e), exc_info=True)
-                    return {
-                        "success": False,
-                        "intent": intent,
-                        "action": "TOOL_ERROR",
-                        "response": f"Tool execution encountered an error: {str(e)}",
-                        "data": {"error": str(e)},
-                        "toolUsed": tool_used,
-                        "memoryUpdated": False,
-                    }
-
-            # Stage 5: Responding (Language Generation & Synthesis)
-            raw_ai_text = None
-            if not tool_result:
-                system_prompt = (
-                    "You are Tamizh JARVIS, a personal agentic AI assistant. "
-                    "Tagline: Think. Plan. Execute. Learn. "
-                    "Be concise, clear, helpful, and proactive."
-                )
-                try:
-                    raw_ai_text = await self.ai.generate(prompt=user_message, system_prompt=system_prompt)
-                except Exception as ai_err:
-                    logger.warning("AI generation fallback: %s", str(ai_err))
-                    raw_ai_text = "I received your request. How may I assist your tasks or study?"
-
-            response_text = self.response_manager.format_response(
-                intent=intent,
-                tool_result=tool_result,
-                raw_ai_text=raw_ai_text,
-                context=active_context,
-            )
-
-            # Memory Update
+            # Record interaction to conversation memory
             try:
                 self.memory.record_interaction(
                     sender="user",
                     text=user_message,
-                    intent=intent,
+                    intent=result.get("intent", "GENERAL_CHAT"),
                 )
                 self.memory.record_interaction(
                     sender="jarvis",
-                    text=response_text,
-                    intent=intent,
-                    metadata=tool_result,
+                    text=result.get("response", ""),
+                    intent=result.get("intent", "GENERAL_CHAT"),
+                    metadata=result.get("data"),
                 )
-                memory_updated = True
-            except Exception as mem_err:
-                logger.warning("Failed to record conversation context: %s", str(mem_err))
+            except TypeError:
+                # Handle 2-arg signature fallback if needed
+                self.memory.record_interaction(user_message, result.get("response", ""))
 
-            return {
-                "success": True,
-                "intent": intent,
-                "action": action_name,
-                "response": response_text,
-                "data": tool_result or {},
-                "toolUsed": tool_used or "none",
-                "memoryUpdated": memory_updated,
-            }
-        except Exception as unhandled_exc:
-            logger.error("JarvisCore unhandled exception: %s", str(unhandled_exc), exc_info=True)
+            return result
+
+        except Exception as exc:
+            logger.error("Error during JarvisCore handling: %s", str(exc), exc_info=True)
             return {
                 "success": False,
-                "intent": intent,
-                "action": "SYSTEM_ERROR",
+                "intent": "ERROR",
+                "action": "CORE_EXCEPTION",
                 "response": "An unexpected error occurred while processing your request. Please try again.",
-                "data": {"error": str(unhandled_exc)},
-                "toolUsed": tool_used or "none",
+                "data": {"error": str(exc)},
+                "toolUsed": "none",
                 "memoryUpdated": False,
             }

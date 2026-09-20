@@ -1,3 +1,4 @@
+from memory.learning_loop import LearningLoop
 from typing import Optional, Dict, Any, List
 from memory.profile_memory import ProfileMemory
 from memory.conversation_memory import ConversationMemory
@@ -25,6 +26,7 @@ class MemoryManager:
         self.long_term = LongTermMemory(db_path=db_path)
         self.profile = ProfileMemory(long_term=self.long_term)
         self.conversation = ConversationMemory()
+        self.learning = LearningLoop(self)
 
     async def initialize(self):
         await self.long_term.init_db()
@@ -137,3 +139,26 @@ class MemoryManager:
 
         scored.sort(key=lambda x: x["relevance_score"], reverse=True)
         return scored[:limit]
+
+    async def record_learning(
+        self,
+        request_text: str,
+        intent: str,
+        action: str,
+        tool: str,
+        success: bool,
+        duration_ms: float = 0.0,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        await self.learning.record_execution(
+            request_text=request_text,
+            intent=intent,
+            action=action,
+            tool=tool,
+            success=success,
+            duration_ms=duration_ms,
+            metadata=metadata
+        )
+
+    async def get_learning_summary(self) -> Dict[str, Any]:
+        return await self.learning.get_learning_summary()

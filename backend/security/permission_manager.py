@@ -8,7 +8,7 @@ logger = logging.getLogger("tamizh_jarvis.security.permissions")
 
 
 class PermissionManager:
-    """Gates and authorizes tool execution across the 4 risk tiers."""
+    """Gates and authorizes tool execution across the 5 risk tiers (READ, LOW, MEDIUM, HIGH, CRITICAL)."""
 
     def __init__(self):
         self.settings = get_settings()
@@ -22,16 +22,16 @@ class PermissionManager:
     ) -> Tuple[bool, str, RiskLevel]:
         params = params or {}
 
-        # 1. Parameter Validation
+        # 1. Parameter Validation & Tool Allowlist & Prompt Injection Defense
         valid, err = ActionValidator.validate(tool_name, action, params)
         if not valid:
-            logger.warning("Action validation rejected %s:%s - %s", tool_name, action, err)
-            return False, f"Validation failure: {err}", RiskLevel.CRITICAL
+            logger.warning("Security rejection for %s:%s - %s", tool_name, action, err)
+            return False, f"This action is strictly prohibited: {err}", RiskLevel.CRITICAL
 
         # 2. Risk Classification
         risk = RiskClassifier.classify(tool_name, action, params)
 
-        # 3. Decision Logic
+        # 3. Decision Logic across 5 tiers
         if risk == RiskLevel.CRITICAL:
             logger.error("BLOCKED critical/forbidden action attempt: %s:%s", tool_name, action)
             return False, "This action is strictly prohibited for security reasons.", risk
@@ -41,5 +41,6 @@ class PermissionManager:
                 logger.info("High-risk action requires human confirmation: %s:%s", tool_name, action)
                 return False, "High-risk action requires explicit user approval.", risk
 
-        # Low and Medium risk are permitted
+        # READ, LOW, and confirmed/standard MEDIUM are permitted
+        logger.debug("Action authorized [Tier: %s]: %s:%s", risk.value, tool_name, action)
         return True, "Authorized", risk
