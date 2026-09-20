@@ -201,8 +201,16 @@ class IntentRouter:
                 entities["action"] = "set_goal"
             return "CAREER", 0.95, entities
 
-        # 20. SCHEDULE
-        if any(w in text for w in ["schedule", "timetable", "today's timetable", "my routine", "calendar"]):
+        # 20. RAG DOCUMENT QUERY
+        if any(w in text for w in ["from my notes", "in my notes", "according to my notes", "search my documents", "my document notes", "my gate notes", "my dbms notes", "my college notes"]):
+            clean_q = re.sub(r"^(?:from|in|according\s+to)\s+my\s+(?:[a-zA-Z0-9_\-]+\s+)?notes\s*,?\s*", "", message, flags=re.IGNORECASE).strip()
+            entities["query"] = clean_q or message
+            return "RAG_QUERY", 0.95, entities
+
+        # 21. SCHEDULE
+        if any(w in text for w in ["schedule", "timetable", "today's timetable", "my routine", "calendar", "plan my evening", "plan evening", "plan my day", "plan today", "evening plan"]):
+            entities["plan_type"] = "evening" if "evening" in text else "day"
+            return "SCHEDULE", 0.95, entities
             return "SCHEDULE", 0.95, entities
 
                 # 20. STUDY LOGGING

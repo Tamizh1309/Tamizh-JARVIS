@@ -86,3 +86,13 @@ async def log_study_session(req: LogStudySessionRequest, core: JarvisCore = Depe
         "score": req.score,
         "timestamp": req.timestamp
     })
+
+
+@router.get("/insights")
+async def get_study_insights(core: JarvisCore = Depends(get_jarvis_core)):
+    """Returns personalized study insights: streak, retention, weak topics, and session analysis."""
+    from study.insights import StudyInsightsEngine
+    await core.initialize()
+    engine = StudyInsightsEngine(core.memory)
+    insights = await engine.calculate_insights()
+    return {"success": True, "insights": insights}

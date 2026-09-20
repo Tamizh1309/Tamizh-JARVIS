@@ -108,8 +108,11 @@ class ResponseManager:
             if action == "daily_briefing":
                 return tool_result.get("message", "Daily briefing loaded.")
 
-            if action == "schedule_status":
+            if action in ["schedule_status", "planned_schedule"]:
                 return tool_result.get("message", "Schedule updated.")
+
+            if action == "rag_query":
+                return tool_result.get("message", "Document query completed.")
 
         if raw_ai_text:
             return raw_ai_text.strip()

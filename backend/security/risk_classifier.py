@@ -40,5 +40,9 @@ class RiskClassifier:
         if tool_name == "study_tool" and action in ["log_session", "record_session"]:
             return RiskLevel.MEDIUM
 
-        # 4. Low Risk: Reading data, next-best-action computation, study recommendations, coding help
+        # 4. Low Risk: RAG queries, document reads, coding analysis, notifications
+        if tool_name in ["rag_tool", "coding_tool"] or action in ["query", "explain", "review", "optimize", "dsa_practice"]:
+            return RiskLevel.LOW
+
+        # 5. Default: Low risk for reads, recommendations
         return RiskLevel.LOW

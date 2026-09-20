@@ -203,6 +203,14 @@ class Planner:
                 }
             )
 
+        # RAG Document Query
+        elif intent == "RAG_QUERY":
+            return TaskPlan(
+                tool_name="rag_tool",
+                action="query",
+                params={"query": entities.get("query", "")}
+            )
+
         # Default: General Chat
         return TaskPlan(
             tool_name=None,

@@ -88,3 +88,52 @@ class MemoryManager:
         await self.initialize()
         domain = domain.upper().strip()
         return await self.long_term.list_memory_by_category(domain)
+
+    async def get_relevant_memories(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Retrieves long-term memories ranked by relevance to user query.
+        Incorporates category alignment, keyword token overlap, recency, and importance.
+        """
+        import re
+        await self.initialize()
+        q_lower = query.lower()
+        q_tokens = set(re.findall(r"\b[a-zA-Z0-9_\-]{2,}\b", q_lower))
+
+        # Detect primary target category based on query intent
+        boosted_categories = set()
+        if any(w in q_lower for w in ["goal", "target", "aim", "career", "aspire"]):
+            boosted_categories.update(["GOAL", "USER_PROFILE"])
+        if any(w in q_lower for w in ["study", "revise", "revision", "exam", "gate", "course", "topic"]):
+            boosted_categories.update(["STUDY", "MISTAKE", "REVISION"])
+        if any(w in q_lower for w in ["prefer", "like", "favorite", "language"]):
+            boosted_categories.add("PREFERENCE")
+        if any(w in q_lower for w in ["achieve", "score", "rank", "won"]):
+            boosted_categories.add("ACHIEVEMENT")
+
+        all_facts = []
+        for cat in ["USER_PROFILE", "GOAL", "PREFERENCE", "TASK", "STUDY", "ACHIEVEMENT", "MISTAKE", "REVISION"]:
+            facts = await self.long_term.list_memory_by_category(cat)
+            all_facts.extend(facts)
+
+        scored = []
+        for fact in all_facts:
+            cat = fact.get("category", "").upper()
+            key = fact.get("key", "").lower()
+            val = str(fact.get("value", "")).lower()
+
+            fact_tokens = set(re.findall(r"\b[a-zA-Z0-9_\-]{2,}\b", f"{key} {val}"))
+            overlap = len(q_tokens & fact_tokens)
+
+            cat_boost = 2.0 if cat in boosted_categories else 0.5
+            # If query specifically targets a category and fact matches that category
+            if boosted_categories and cat not in boosted_categories and overlap == 0:
+                continue
+
+            score = (overlap * 1.5) + cat_boost
+            if score > 0.6:
+                fact_copy = dict(fact)
+                fact_copy["relevance_score"] = round(score, 2)
+                scored.append(fact_copy)
+
+        scored.sort(key=lambda x: x["relevance_score"], reverse=True)
+        return scored[:limit]

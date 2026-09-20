@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +10,10 @@ from api.chat import router as chat_router, get_jarvis_core
 from api.study import router as study_router
 from api.tasks import router as tasks_router
 from api.memory import router as memory_router
+from api.voice import router as voice_router
+from api.documents import router as documents_router
+from api.notifications import router as notifications_router
+from api.coding import router as coding_router
 
 # Setup structured logging
 logging.basicConfig(
@@ -76,6 +80,10 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(study_router, prefix="/api")
 app.include_router(tasks_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
+app.include_router(voice_router, prefix="/api/voice", tags=["Voice"])
+app.include_router(documents_router, prefix="/api/documents", tags=["Documents"])
+app.include_router(notifications_router, prefix="/api/notifications", tags=["Notifications"])
+app.include_router(coding_router, prefix="/api/coding", tags=["Coding Workspace"])
 
 
 @app.get("/")

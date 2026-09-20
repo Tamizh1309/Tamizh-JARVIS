@@ -10,6 +10,7 @@ from tools.schedule_tool import ScheduleTool
 from tools.progress_tool import ProgressTool
 from tools.profile_tool import ProfileTool
 from tools.coding_tool import CodingTool
+from tools.rag_tool import RAGTool
 
 from core.context_manager import ContextManager
 from core.router import IntentRouter
@@ -47,6 +48,7 @@ class JarvisCore:
             "progress_tool": ProgressTool(self.memory),
             "profile_tool": ProfileTool(self.memory, self.ai),
             "coding_tool": CodingTool(self.ai),
+            "rag_tool": RAGTool(),
         }
 
     def get_tool(self, tool_name: str) -> Optional[BaseTool]:

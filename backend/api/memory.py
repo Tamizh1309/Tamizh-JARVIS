@@ -27,6 +27,18 @@ async def get_memory_summary(core: JarvisCore = Depends(get_jarvis_core)):
     }
 
 
+@router.get("/relevant")
+async def get_relevant_memories(
+    q: str = Query(..., description="Query for relevance search"),
+    limit: int = Query(5, ge=1, le=20),
+    core: JarvisCore = Depends(get_jarvis_core)
+):
+    """Retrieves long-term memory records scored by relevance to user query."""
+    await core.initialize()
+    memories = await core.memory.get_relevant_memories(q, limit=limit)
+    return {"success": True, "query": q, "count": len(memories), "memories": memories}
+
+
 @router.get("/search")
 async def search_memory(
     q: str = Query(..., description="Search query"),
